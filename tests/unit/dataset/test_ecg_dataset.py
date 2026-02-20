@@ -1,4 +1,4 @@
-"""Unit tests for ECGAugmentation and ECGDataset.
+"""Unit tests for ECGDataset.
 
 Copyright 2026 Mateusz Golebiewski
 """
