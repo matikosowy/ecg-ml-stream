@@ -8,13 +8,13 @@ authors = [
     { name = "Mateusz Golebiewski", email = "matikosowy@gmail.com" }
 ]
 
-
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 dependencies = [
     "kafka-python==2.3.0",
 ]
 
+[project.optional-dependencies]
 dev = [
     "pytest==9.0.2",
     "pytest-cov==7.0.0",
@@ -29,7 +29,7 @@ include = ["ecg*"]
 [tool.ruff]
 line-length = 100
 indent-width = 4
-target-version = "py310"
+target-version = "py311"
 include = ["src/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint]
@@ -41,6 +41,7 @@ extend-ignore = ["EXE002"] # No shebang needed for Python files
 [tool.ruff.lint.flake8-pytest-style]
 parametrize-names-type = "tuple"
 
+[tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "FBT003", # Allow boolean values in function calls
     "S101", # Allow use of assert statements in tests
