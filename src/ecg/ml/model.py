@@ -60,6 +60,14 @@ class ResidualBlock1D(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv1d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm1d(out_channels),
+            )
+        else:
+            self.shortcut = nn.Sequential()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Compute residual block output.
 
@@ -67,7 +75,7 @@ class ResidualBlock1D(nn.Module):
             x (torch.Tensor): Input tensor of shape `(batch_size, in_channels, seq_length)`.
 
         Returns:
-            torch.Tensor: Output tensor of shape `(batch_size, out_channels, seq_length)`.
+            torch.Tensor: Output tensor of shape `(batch_size, out_channels, seq_length // stride)`.
 
         """
         out = self.conv1(x)
@@ -78,7 +86,7 @@ class ResidualBlock1D(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
 
-        out += x
+        out += self.shortcut(x)
         return F.relu(out)
 
 
@@ -162,8 +170,8 @@ class ResNet1D(nn.Module):
 
         self._initialize_weights()
 
+    @staticmethod
     def _make_layer(
-        self,
         in_channels: int,
         out_channels: int,
         num_blocks: int,
