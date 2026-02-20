@@ -5,40 +5,45 @@ Copyright 2026 Mateusz Golebiewski
 
 import ast
 from pathlib import Path
-from typing import Union
 
 import numpy as np
 import pandas as pd
 import torch
 import wfdb
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from ecg.utils.constants import SUPERCLASS_MAPPING, SUPERCLASS_PRIORITY
 from ecg.utils.helpers import normalize_signal
 
 
 class ECGDataset(Dataset):
+
     """PyTorch Dataset for the PTB-XL ECG dataset."""
+
     def __init__(
         self,
         data_path: str,
         sampling_rate: int = 100,
         window_size_sec: float = 2.5,
         windows_stride_sec: float = 1.25,
-        split: str = 'train',
-        transforms=None,
+        split: str = "train",
+        transforms: callable | None = None,
     ) -> None:
         """Initialize the ECGDataset.
-        
+
         Args:
             data_path (str): Root directory of the PTB-XL dataset.
             sampling_rate (int): Sampling rate of the ECG signals. Defaults to 100 Hz.
-            window_size_sec (float): Duration of a training window in seconds. Defaults to 2.5 seconds.
-            windows_stride_sec (float): Stride between training windows in seconds. Defaults to 1.25 seconds.
+            window_size_sec (float): Duration of a training window in seconds.
+                Defaults to 2.5 seconds.
+            windows_stride_sec (float): Stride between training windows in seconds.
+                Defaults to 1.25 seconds.
             split (str): Dataset split to use ('train', 'val', 'test'). Defaults to 'train'.
             transforms (callable): Optional. Transformations to apply to each window.
+
         """
         self.data_path = Path(data_path)
+        self.sampling_rate = sampling_rate
         self.window_size = int(window_size_sec * sampling_rate)
         self.windows_stride = int(windows_stride_sec * sampling_rate)
         self.split = split
@@ -50,19 +55,20 @@ class ECGDataset(Dataset):
 
     def _load_metadata(self) -> pd.DataFrame:
         """Load and preprocess the PTB-XL metadata.
-        
+
         Returns:
             pd.DataFrame: Preprocessed metadata DataFrame.
-        """
-        metadata_path = self.data_path / 'ptbxl_database.csv'
-        df = pd.read_csv(metadata_path, index_col="ecg_id")
-        df["scp_codes"] = df["scp_codes"].apply(ast.literal_eval) # Parse strings to dicts
 
-        scp_path = self.data_path / 'scp_statements.csv'
+        """
+        metadata_path = self.data_path / "ptbxl_database.csv"
+        df = pd.read_csv(metadata_path, index_col="ecg_id")
+        df["scp_codes"] = df["scp_codes"].apply(ast.literal_eval)  # Parse strings to dicts
+
+        scp_path = self.data_path / "scp_statements.csv"
         scp_df = pd.read_csv(scp_path, index_col=0)
         scp_df = scp_df[scp_df["diagnostic"] == 1]
 
-        def get_superclass(scp_codes: dict) -> Union[str, None]:
+        def get_superclass(scp_codes: dict) -> str | None:
             """Map record's SCP codes to a superclass of highest priority.
 
             Args:
@@ -76,10 +82,10 @@ class ECGDataset(Dataset):
             for code, confidence in scp_codes.items():
                 if code in scp_df.index and confidence > 0:
                     superclass = scp_df.loc[code, "diagnostic_class"]
-                    if pd.notna(superclass) and superclass in self.SUPERCLASS_MAPPING:
+                    if pd.notna(superclass) and superclass in SUPERCLASS_MAPPING:
                         superclasses.append(superclass)
-            
-            for superclass in self.SUPERCLASS_PRIORITY:
+
+            for superclass in SUPERCLASS_PRIORITY:
                 if superclass in superclasses:
                     return superclass
             return None
@@ -87,10 +93,10 @@ class ECGDataset(Dataset):
         df["superclass"] = df["scp_codes"].apply(get_superclass)
 
         df = df[df["superclass"].notna()]
-        df["label"] = df["superclass"].map(self.SUPERCLASS_MAPPING)
+        df["label"] = df["superclass"].map(SUPERCLASS_MAPPING)
 
         return df
-    
+
     def _get_split_records(self) -> pd.DataFrame:
         """Filter metadata to the requested train/val/test split.
 
@@ -111,24 +117,25 @@ class ECGDataset(Dataset):
             return self.metadata[self.metadata["strat_fold"] == 10]
         msg = f"Unknown split: {self.split}. Valid options are 'train', 'val' or 'test'."
         raise ValueError(msg)
-    
+
     def _create_window_index(self) -> list[tuple[int, int, int]]:
         """Build an index mapping dataset records to (ecg_id, window_start, label) tuples.
-        
+
         Returns:
             list[tuple[int, int, int]]: List of tuples containing (ecg_id, window_start, label).
+
         """
         windows: list[tuple[int, int, int]] = []
-        signal_length = 10 * self.sampling_rate # Each record is 10 seconds long
+        signal_length = 10 * self.sampling_rate  # Each record is 10 seconds long
 
         for ecg_id, row in self.records.iterrows():
             start = 0
             while start + self.window_size <= signal_length:
                 windows.append((ecg_id, start, row["label"]))
                 start += self.windows_stride
-        
+
         return windows
-    
+
     def _load_signal(self, ecg_id: int) -> np.ndarray:
         """Load a raw ECG signal from the dataset.
 
@@ -143,9 +150,9 @@ class ECGDataset(Dataset):
         key = "filename_lr" if self.sampling_rate == 100 else "filename_hr"
         filename = row[key]
         filepath = self.data_path / filename
-        signal, _ = wfdb.rdsamp(str(filepath)) # Returns (samples, channels)
+        signal, _ = wfdb.rdsamp(str(filepath))  # Returns (samples, channels)
 
-        return signal.T.astype(np.float32) # Transpose to (channels, samples)
+        return signal.T.astype(np.float32)  # Transpose to (channels, samples)
 
     def __len__(self) -> int:
         """Return the total number of windows in the split.
@@ -155,25 +162,114 @@ class ECGDataset(Dataset):
 
         """
         return len(self.window_index)
-    
+
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         """Return a single normalized ECG window and its label.
-        
+
         Args:
             idx (int): Index of the window to retrieve.
-            
+
         Returns:
             tuple[torch.Tensor, int]: Tuple containing the ECG window
             tensor of shape (12, window_size) and its label.
+
         """
         ecg_id, window_start, label = self.window_index[idx]
 
         signal = self._load_signal(ecg_id)
-        window = signal[:, window_start:window_start + self.window_size]
+        window = signal[:, window_start : window_start + self.window_size]
         window = normalize_signal(window)
         window_tensor = torch.from_numpy(window)
 
         if self.transforms:
             window_tensor = self.transforms(window_tensor)
-        
+
         return window_tensor, label
+
+    def get_full_record(self, ecg_id: int) -> tuple[np.ndarray, int]:
+        """Return the full 10-second signal and label for a record.
+
+        Args:
+            ecg_id (int): Unique PTB-XL record indentifier.
+
+        Returns:
+            tuple[np.ndarray, int]: Tuple containing the full ECG signal
+            of shape (12, samples) and its label.
+
+        """
+        signal = self._load_signal(ecg_id)
+        label = int(self.metadata.loc[ecg_id, "label"])
+        return signal, label
+
+    def get_record_windows(self, ecg_id: int) -> tuple[torch.Tensor, int]:
+        """Return all sliding windows for a record (for inference).
+
+        Args:
+        ecg_id (int): Unique PTB-XL record indentifier.
+
+        Returns:
+            tuple[torch.Tensor, int]: Tuple containing (windows_tensor, label_index)
+            where windows has shape (num_windows, 12, window_size).
+
+        """
+        signal = self._load_signal(ecg_id)
+        label = int(self.metadata.loc[ecg_id, "label"])
+
+        windows = []
+        signal_length = signal.shape[1]
+        start = 0
+
+        while start + self.window_size <= signal_length:
+            window = normalize_signal(signal[:, start : start + self.window_size])
+            windows.append(window)
+            start += self.windows_stride
+
+        return torch.from_numpy(np.stack(windows, axis=0)), label
+
+
+def create_dataloaders(
+    data_path: str,
+    batch_size: int = 32,
+    sampling_rate: int = 100,
+    num_workers: int = 4,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Create DataLoaders for the train, validation and test splits.
+
+    Args:
+        data_path (str): Root directory of the PTB-XL dataset.
+        batch_size (int): Batch size for the DataLoaders. Defaults to 32.
+        sampling_rate (int): Sampling rate of the ECG signals. Defaults to 100 Hz.
+        num_workers (int): Number of subprocesses for data loading. Defaults to 4.
+
+    Returns:
+        tuple[DataLoader, DataLoader, DataLoader]: Tuple containing the train, validation
+        and test DataLoaders.
+
+    """
+    train_dataset = ECGDataset(data_path, sampling_rate, split="train")
+    val_dataset = ECGDataset(data_path, sampling_rate, split="val")
+    test_dataset = ECGDataset(data_path, sampling_rate, split="test")
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    return train_loader, val_loader, test_loader

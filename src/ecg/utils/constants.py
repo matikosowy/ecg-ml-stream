@@ -3,7 +3,6 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
-
 CLASS_NAMES: list[str] = ["NORM", "MI", "STTC", "CD", "HYP"]
 
 CLASS_DESCRIPTIONS: dict[str, str] = {

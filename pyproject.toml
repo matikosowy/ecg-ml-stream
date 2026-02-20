@@ -56,6 +56,12 @@ parametrize-names-type = "tuple"
     "S101", # Allow use of assert statements in tests
 ]
 
+"src/ecg/dataset/ecg_dataset.py" = [
+    "PLR2004", # Allow 'magic values' for PTB-XL stratified splits and sampling rates
+    "PLR0913", # Allow many arguments in the ECGDataset constructor
+    "PLR0917", # Allow many arguments in the ECGDataset constructor
+]
+
 
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["df"]

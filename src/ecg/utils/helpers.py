@@ -5,6 +5,7 @@ Copyright 2026 Mateusz Golebiewski
 
 import numpy as np
 
+
 def normalize_signal(signal: np.ndarray) -> np.ndarray:
     """Apply per-channel Z-score normalization to a signal array.
 
@@ -13,7 +14,8 @@ def normalize_signal(signal: np.ndarray) -> np.ndarray:
 
     Returns:
         np.ndarray:Normalized array of the same shape.
+
     """
     mean = signal.mean(axis=-1, keepdims=True)
-    std = signal.std(axis=-1, keepdims=True) + 1e-8
+    std = signal.std(axis=-1, keepdims=True) + 1e-8 # epsilon to prevent division by zero
     return (signal - mean) / std
