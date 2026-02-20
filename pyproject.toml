@@ -38,6 +38,11 @@ select = ["ALL"]
 
 extend-ignore = ["EXE002"] # No shebang needed for Python files
 
+ignore = [
+    "D211", # Ruff's rules incompatibily
+    "D213", # Ruff's rules incompatibily
+]
+
 [tool.ruff.lint.flake8-pytest-style]
 parametrize-names-type = "tuple"
 

@@ -9,7 +9,7 @@ RUN pip --no-cache-dir install --upgrade pip setuptools wheel
 
 COPY pyproject.toml .
 RUN mkdir -p "src/ecg" \
-    && pip install --no-cache-dir "." \
+    && pip install --no-cache-dir ".[dev]" \
     && rm -rf "src"
 
 COPY src ./src
@@ -29,5 +29,5 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY --chown=ecg:ecg pyproject.toml .
 COPY --chown=ecg:ecg src ./src
 
-RUN pip install --no-cache-dir -e "."
+RUN pip install --no-cache-dir -e ".[dev]"
 USER ecg:ecg

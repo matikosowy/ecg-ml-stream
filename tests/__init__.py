@@ -1,4 +1,4 @@
-"""Tests package for ECG-ML-STREAM
+"""Tests package for ECG-ML-STREAM.
 
 Copyright 2026 Mateusz Golebiewski
 """
