@@ -4,6 +4,7 @@ Copyright 2026 Mateusz Golebiewski
 """
 
 import ast
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -27,7 +28,7 @@ class ECGDataset(Dataset):
         window_size_sec: float = 2.5,
         windows_stride_sec: float = 1.25,
         split: str = "train",
-        transforms: callable | None = None,
+        transforms: Callable | None = None,
     ) -> None:
         """Initialize the ECGDataset.
 

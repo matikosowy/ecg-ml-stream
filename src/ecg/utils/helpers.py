@@ -17,5 +17,5 @@ def normalize_signal(signal: np.ndarray) -> np.ndarray:
 
     """
     mean = signal.mean(axis=-1, keepdims=True)
-    std = signal.std(axis=-1, keepdims=True) + 1e-8 # epsilon to prevent division by zero
+    std = signal.std(axis=-1, keepdims=True) + 1e-8  # epsilon to prevent division by zero
     return (signal - mean) / std
