@@ -1,0 +1,59 @@
+[project]
+version = "0.0.0"
+
+name = "ecg-ml-stream"
+description = "Distributed real-time ECG signal processing system with ML capabilities"
+
+authors = [
+    { name = "Mateusz Golebiewski", email = "matikosowy@gmail.com" }
+]
+
+
+requires-python = ">=3.10"
+
+dependencies = [
+    "kafka-python==2.3.0",
+]
+
+dev = [
+    "pytest==9.0.2",
+    "pytest-cov==7.0.0",
+    "ruff==0.15.1",
+    "coverage-badge==1.1.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ecg*"]
+
+[tool.ruff]
+line-length = 100
+indent-width = 4
+target-version = "py310"
+include = ["src/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+preview = true
+select = ["ALL"]
+
+extend-ignore = ["EXE002"] # No shebang needed for Python files
+
+[tool.ruff.lint.flake8-pytest-style]
+parametrize-names-type = "tuple"
+
+"tests/**/*.py" = [
+    "FBT003", # Allow boolean values in function calls
+    "S101", # Allow use of assert statements in tests
+]
+
+
+[tool.ruff.lint.pep8-naming]
+ignore-names = ["df"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.coverage.report]
+exclude_also = ["if __name__ == .__main__.:"]
