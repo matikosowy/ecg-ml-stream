@@ -25,7 +25,10 @@ class TestECGDataset:
             ECGDataset(str(tmp_path), split="unknown")
 
     def test_getitem_returns_tensor_and_label(
-        self, csv_mocks, fake_signal_100hz, tmp_path,
+        self,
+        csv_mocks,
+        fake_signal_100hz,
+        tmp_path,
     ):
         ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
         with patch(RDSAMP, return_value=(fake_signal_100hz, {})):
@@ -59,7 +62,10 @@ class TestECGDataset:
 class TestCreateDataloaders:
     def test_returns_three_loaders(self, csv_mocks, tmp_path):
         loaders = create_dataloaders(
-            str(tmp_path), batch_size=4, sampling_rate=100, num_workers=0,
+            str(tmp_path),
+            batch_size=4,
+            sampling_rate=100,
+            num_workers=0,
         )
         train_loader, val_loader, test_loader = loaders
         assert len(train_loader.dataset) >= 0

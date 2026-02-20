@@ -13,7 +13,7 @@ import torch
 import wfdb
 from torch.utils.data import DataLoader, Dataset
 
-from ecg.utils.constants import SUPERCLASS_MAPPING, SUPERCLASS_PRIORITY
+from ecg.utils.constants import SUPERCLASS_MAPPING, SUPERCLASS_PRIORITY, CLASS_NAMES
 from ecg.utils.helpers import normalize_signal
 
 
@@ -226,6 +226,35 @@ class ECGDataset(Dataset):
             start += self.windows_stride
 
         return torch.from_numpy(np.stack(windows, axis=0)), label
+    
+    def get_sample_for_streaming(self, idx: int | None = None) -> dict:
+        """Return a record formatted for Kafka streaming.
+        
+        Args:
+            idx (int | None): Optional index of the record to retrieve. If None, a random record is returned.
+            
+        Returns:
+            dict: Dictionary containing the ECG record data and metadata, ready for JSON serialization.
+        
+        """
+        if idx is None:
+            idx = int(np.random.default_rng().integers(len(self.records)))
+
+        ecg_id = self.records.index[idx]
+        row = self.records.loc[ecg_id]
+        signal = self._load_signal(ecg_id)
+
+        return {
+            "ecg_id": int(ecg_id),
+            "signal": signal.to_list(),
+            "label": int(row["label"]),
+            "label_name": CLASS_NAMES[int(row["label"])],
+            "patient_id": (
+                int(row["patient_id"]) if pd.notna(row["patient_id"] else None)
+            ),
+            "age": int(row["age"]) if pd.notna(row["age"]) else None,
+            "sex": int(row["sex"]) if pd.notna(row["sex"]) else None,
+        }
 
 
 def create_dataloaders(
