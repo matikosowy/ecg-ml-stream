@@ -10,7 +10,7 @@ import torch
 
 from ecg.dataset.ecg_dataset import ECGDataset, create_dataloaders
 
-RDSAMP = "ecg.dataset.ecg_dataset.wfdb.rdsamp"
+_RDSAMP = "ecg.dataset.ecg_dataset.wfdb.rdsamp"
 
 
 class TestECGDataset:
@@ -31,21 +31,21 @@ class TestECGDataset:
         tmp_path,
     ):
         ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
-        with patch(RDSAMP, return_value=(fake_signal_100hz, {})):
+        with patch(_RDSAMP, return_value=(fake_signal_100hz, {})):
             signal, label = ds[0]
         assert isinstance(signal, torch.Tensor)
         assert isinstance(label, int)
 
     def test_500hz_getitem(self, csv_mocks, fake_signal_500hz, tmp_path):
         ds = ECGDataset(str(tmp_path), sampling_rate=500, split="train")
-        with patch(RDSAMP, return_value=(fake_signal_500hz, {})):
+        with patch(_RDSAMP, return_value=(fake_signal_500hz, {})):
             signal, _ = ds[0]
         assert isinstance(signal, torch.Tensor)
 
     def test_get_full_record(self, csv_mocks, fake_signal_100hz, tmp_path):
         ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
         ecg_id = ds.records.index[0]
-        with patch(RDSAMP, return_value=(fake_signal_100hz, {})):
+        with patch(_RDSAMP, return_value=(fake_signal_100hz, {})):
             signal, label = ds.get_full_record(ecg_id)
         assert signal.shape == (12, 1000)
         assert isinstance(label, int)
@@ -53,10 +53,28 @@ class TestECGDataset:
     def test_get_record_windows(self, csv_mocks, fake_signal_100hz, tmp_path):
         ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
         ecg_id = ds.records.index[0]
-        with patch(RDSAMP, return_value=(fake_signal_100hz, {})):
+        with patch(_RDSAMP, return_value=(fake_signal_100hz, {})):
             windows, label = ds.get_record_windows(ecg_id)
         assert windows.ndim == 3
         assert isinstance(label, int)
+
+    def test_getitem_applies_transform(self, csv_mocks, fake_signal_100hz, tmp_path):
+        def identity(x):
+            return x
+
+        ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train", transforms=identity)
+        with patch(_RDSAMP, return_value=(fake_signal_100hz, {})):
+            signal, label = ds[0]
+        assert isinstance(signal, torch.Tensor)
+        assert isinstance(label, int)
+
+    def test_get_sample_for_streaming(self, csv_mocks, fake_signal_100hz, tmp_path):
+        ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
+        with patch(_RDSAMP, return_value=(fake_signal_100hz, {})):
+            sample = ds.get_sample_for_streaming()
+        assert isinstance(sample["ecg_id"], int)
+        assert isinstance(sample["signal"], list)
+        assert isinstance(sample["label"], int)
 
 
 class TestCreateDataloaders:

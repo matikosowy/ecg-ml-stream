@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 
 class ECGProducer:
-
     """Multi-thread Kafka producer that simulates hospital ECG streams.
 
     Each thread represents one hospital and sends one PTB-XL record every `interval_sec`
@@ -152,7 +151,7 @@ class ECGProducer:
                 )
                 record_metadata = future.get(timeout=10)
 
-                while self.stats_lock:
+                with self.stats_lock:
                     self.stats["sent"] += 1
 
                 logger.info(

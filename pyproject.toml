@@ -45,6 +45,8 @@ extend-ignore = ["EXE002"] # No shebang needed for Python files
 ignore = [
     "D211",     # Ruff's rules incompatibility
     "D213",     # Ruff's rules incompatibility
+    "D203",     # Ruff's rules incompatibility
+    "COM812",   # Ruff's rules incompatibility
     "PLR0913",  # Allow many arguments in class constructors
     "PLR0917",  # Allow many arguments in class constructors
     "S311"      # No cryptographic functions used, so no need for warnings about weak algorithms
@@ -61,6 +63,8 @@ parametrize-names-type = "tuple"
     "DOC",      # Skip docstrings for tests
     "PLR",      # Allow 'magic values' and skip class/static methods
     "ARG",      # Allow fixtures (unused arguments) and many arguments in test functions
+    "SLF001",   # Allow invoking private methods in tests
+    "RUF069",   # Allow float comparisons
 ]
 
 "src/ecg/dataset/ecg_dataset.py" = [
