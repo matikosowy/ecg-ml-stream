@@ -15,7 +15,7 @@ from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 
-from ecg.dataset import ECGDataset
+from ecg.dataset.ecg_dataset import ECGAugmentation, ECGDataset
 from ecg.ml.metrics import (
     AverageMeter,
     EarlyStopping,
@@ -324,12 +324,15 @@ def main() -> None:
 
     logger.info("Loading datasets...")
 
+    augmentation = ECGAugmentation()
+
     train_dataset = ECGDataset(
         data_path=str(data_path),
         sampling_rate=args.sampling_rate,
         window_size=args.window_size,
         window_stride=args.window_stride,
         split="train",
+        transforms=augmentation,
     )
     val_dataset = ECGDataset(
         data_path=str(data_path),
@@ -385,7 +388,10 @@ def main() -> None:
 
     logger.info("Model: %d parameters", count_parameters(model))
 
-    criterion = nn.CrossEntropyLoss()
+    class_weights = train_dataset.get_class_weights().to(device)
+    logger.info("Class weights: %s", class_weights)
+
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr,

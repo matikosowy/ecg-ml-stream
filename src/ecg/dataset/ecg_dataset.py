@@ -265,6 +265,19 @@ class ECGDataset(Dataset):
             "sex": int(row["sex"]) if pd.notna(row["sex"]) else None,
         }
 
+    def get_class_weights(self) -> torch.Tensor:
+        """Compute inverse-frequency class weights for the training split.
+
+        Returns:
+            torch.Tensor: Tensor of shape (num_classes,) with per-class weights.
+
+        """
+        labels = [w[2] for w in self.window_index]
+        class_counts = np.bincount(labels, minlength=5)
+        total = len(labels)
+        weights = total / (5 * class_counts + 1e-8)
+        return torch.FloatTensor(weights)
+
 
 def create_dataloaders(
     data_path: str,
@@ -312,3 +325,71 @@ def create_dataloaders(
     )
 
     return train_loader, val_loader, test_loader
+
+
+class ECGAugmentation:
+    """On-the-fly ECG signal augmentation applied during training."""
+
+    def __init__(
+        self,
+        amplitude_scale_range: tuple[float, float] = (0.8, 1.2),
+        noise_std: float = 0.05,
+        lead_dropout_prob: float = 0.1,
+        time_mask_max_samples: int = 25,
+        p: float = 0.5,
+    ) -> None:
+        """Initialize ECGAugmentation.
+
+        Args:
+            amplitude_scale_range (tuple[float, float]): Range for random amplitude scaling.
+                Defaults to (0.8, 1.2).
+            noise_std (float): Standard deviation of the added Gaussian noise. Defaults to 0.05.
+            lead_dropout_prob (float): Probability of dropping out each lead. Defaults to 0.1.
+            time_mask_max_samples (int): Maximum length of time masking in samples. Defaults to 25.
+            p (float): Probability of applying augmentation to a sample. Defaults to 0.5.
+
+        """
+        self.amplitude_scale_range = amplitude_scale_range
+        self.noise_std = noise_std
+        self.lead_dropout_prob = lead_dropout_prob
+        self.time_mask_max_samples = time_mask_max_samples
+        self.p = p
+        self._rng = np.random.default_rng()
+
+    def __call__(self, signal: torch.Tensor) -> torch.Tensor:
+        """Apply random augmentations to a signal tensor.
+
+        Args:
+            signal (torch.Tensor): Input ECG signal tensor of shape (12, samples).
+
+        Returns:
+            torch.Tensor: Augmented ECG signal tensor of shape (12, samples).
+
+        """
+        x = signal.clone()
+
+        # Amplitude scaling
+        if self._rng.random() < self.p:
+            scale = self._rng.uniform(*self.amplitude_scale_range)
+            x *= scale
+
+        # Additive Gaussian noise
+        if self._rng.random() < self.p:
+            noise = torch.randn_like(x) * self.noise_std
+            x += noise
+
+        # Lead dropout
+        if self._rng.random() < self.p:
+            mask = torch.from_numpy(
+                self._rng.random(x.shape[0]) > self.lead_dropout_prob,
+            ).float()
+            x *= mask.unsqueeze(1)
+
+        # Time masking
+        if self._rng.random() < self.p:
+            seq_len = x.shape[1]
+            mask_len = self._rng.integers(1, self.time_mask_max_samples + 1)
+            start = self._rng.integers(0, max(1, seq_len - mask_len))
+            x[:, start : start + mask_len] = 0.0
+
+        return x
