@@ -1,0 +1,84 @@
+[project]
+version = "0.0.0"
+
+name = "ecg-ml-stream"
+description = "Distributed real-time ECG signal processing system with ML capabilities"
+
+authors = [
+    { name = "Mateusz Golebiewski", email = "matikosowy@gmail.com" }
+]
+
+requires-python = ">=3.11"
+
+dependencies = [
+    "kafka-python==2.3.0",
+    "pandas==2.2.3",
+    "numpy==2.4.2",
+    "wfdb==4.3.1",
+    "torch==2.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.2",
+    "pytest-cov==7.0.0",
+    "ruff==0.15.1",
+    "genbadge[coverage]",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ecg*"]
+
+[tool.ruff]
+line-length = 100
+indent-width = 4
+target-version = "py311"
+include = ["src/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+preview = true
+select = ["ALL"]
+
+extend-ignore = ["EXE002"] # No shebang needed for Python files
+
+ignore = [
+    "D211",     # Ruff's rules incompatibility
+    "D213",     # Ruff's rules incompatibility
+    "D203",     # Ruff's rules incompatibility
+    "COM812",   # Ruff's rules incompatibility
+    "PLR0913",  # Allow many arguments in class constructors
+    "PLR0917",  # Allow many arguments in class constructors
+    "S311"      # No cryptographic functions used, so no need for warnings about weak algorithms
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+parametrize-names-type = "tuple"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",     # Allow use of assert statements in tests
+    "ANN",      # Skip type annotations for tests
+    "D",        # Skip docstrings for tests
+    "DOC",      # Skip docstrings for tests
+    "PLR",      # Allow 'magic values' and skip class/static methods
+    "ARG",      # Allow fixtures (unused arguments) and many arguments in test functions
+    "SLF001",   # Allow invoking private methods in tests
+    "RUF069",   # Allow float comparisons
+]
+
+"src/ecg/dataset/ecg_dataset.py" = [
+    "PLR2004", # Allow 'magic values' for PTB-XL stratified splits and sampling rates
+]
+
+
+[tool.ruff.lint.pep8-naming]
+ignore-names = ["df"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.coverage.report]
+exclude_also = ["if __name__ == .__main__.:"]
