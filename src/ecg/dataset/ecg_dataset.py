@@ -6,6 +6,7 @@ Copyright 2026 Mateusz Golebiewski
 import ast
 from collections.abc import Callable
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -18,10 +19,16 @@ from ecg.utils.helpers import normalize_signal
 
 
 class ECGDataset(Dataset):
-    """PyTorch Dataset for the PTB-XL ECG dataset."""
+    """PyTorch Dataset for the PTB-XL ECG dataset.
 
-    CLASS_NAMES = CLASS_NAMES
-    SUPERCLASS_MAPPING = SUPERCLASS_MAPPING
+    Attributes:
+        CLASS_NAMES (ClassVar[list[str]]): List of class names.
+        SUPERCLASS_MAPPING (ClassVar[dict[str, int]]): Mapping of superclass names to label indices.
+
+    """
+
+    CLASS_NAMES: ClassVar[list[str]] = CLASS_NAMES
+    SUPERCLASS_MAPPING: ClassVar[dict[str, int]] = SUPERCLASS_MAPPING
 
     def __init__(
         self,
@@ -253,7 +260,6 @@ class ECGDataset(Dataset):
             "signal": signal.tolist(),
             "label": int(row["label"]),
             "label_name": self.CLASS_NAMES[int(row["label"])],
-            "superclass": self.SUPERCLASS_MAPPING[int(row["label"])],
             "patient_id": (int(row["patient_id"]) if pd.notna(row["patient_id"]) else None),
             "age": int(row["age"]) if pd.notna(row["age"]) else None,
             "sex": int(row["sex"]) if pd.notna(row["sex"]) else None,
