@@ -10,6 +10,9 @@ from torch import nn
 from ecg.utils.constants import (
     NUM_CLASSES,
     NUM_LEADS,
+    CLASS_NAMES,
+    CLASS_DESCRIPTIONS,
+    DANGEROUS_CLASSES,
 )
 
 
@@ -95,8 +98,8 @@ class ResNet1D(nn.Module):
 
     def __init__(
         self,
-        input_channels: int = NUM_LEADS,
-        num_classes: int = NUM_CLASSES,
+        input_channels: int = 12,
+        num_classes: int = 5,
         base_filters: int = 64,
         kernel_size: int = 7,
         num_blocks: list[int] | None = None,
@@ -267,3 +270,186 @@ class ResNet1D(nn.Module):
 
         """
         return torch.argmax(self.forward(x), dim=1)
+
+
+class ECGClassifier:
+    """High-level wrapper around ResNet1D with voting-based inference."""
+
+    CLASS_NAMES = CLASS_NAMES
+    CLASS_DESCRIPTIONS = CLASS_DESCRIPTIONS
+    DANGEROUS_CLASSES = DANGEROUS_CLASSES
+
+    def __init__(
+        self,
+        model_path: str | None = None,
+        device: str | None = None,
+    ) -> None:
+        """Initialize the ECGClassifier.
+
+        Args:
+            model_path (str | None): Path to a saved checkpoint file. Random weights if None.
+            device (str | None): Device to use for inference.
+
+        """
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = ResNet1D(
+            input_channels=NUM_LEADS,
+            num_classes=NUM_CLASSES,
+            base_filters=64,
+            kernel_size=7,
+            num_blocks=[2, 2, 2, 2],
+            dropout=0.2,
+        ).to(self.device)
+
+        if model_path:
+            self.load(model_path)
+        
+        self.model.eval()
+    
+    def load(self, path: str) -> None:
+        """Load model weights from a checkpoint file.
+        
+        Args:
+            path (str): Path to the checkpoint file.
+
+        """
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            self.model.load_state_dict(checkpoint)
+        self.model.eval()
+
+    def save(
+        self,
+        path: str,
+        optimizer: torch.optim.Optimizer | None = None,
+        epoch: int | None = None,
+        metrics: dict | None = None,
+    ) -> None:
+        """Save model weights to a checkpoint file.
+        
+        Args:
+            path (str): Path to save the checkpoint file.
+            optimizer (torch.optim.Optimizer | None): Optimizer to save (optional).
+            epoch (int | None): Current epoch number to save (optional).
+            metrics (dict | None): Training metrics to save (optional).
+
+        """
+        checkpoint = {
+            "model_state_dict": self.model.state_dict(),
+            "class_names": self.CLASS_NAMES,
+        }
+        if optimizer:
+            checkpoint["optimizer_state_dict"] = optimizer.state_dict()
+        if epoch is not None:
+            checkpoint["epoch"] = epoch
+        if metrics:
+            checkpoint["metrics"] = metrics
+        
+        torch.save(checkpoint, path)
+
+    @torch.no_grad()
+    def predict_windows(self, windows: torch.Tensor) -> dict:
+        """Run inference on multiple overlapping windows with soft voting.
+        
+        Args:
+            windows (torch.Tensor): Tensor of shape `(num_windows, input_channels, seq_length)`
+            
+        Returns:
+            dict: Dictionary with keys: `class`, `class_idx`, `probability`,
+            `all_probabilities`, `is_dangerous`, `description`, `window_predictions`.
+        
+        """
+        self.model.eval()
+        windows = windows.to(self.device)
+
+        logits = self.model(windows)
+        probs = F.softmax(logits, dim=1)
+
+        avg_probs = probs.mean(dim=0)
+        predicted_class_idx = int(torch.argmax(avg_probs).item())
+        predicted_class = self.CLASS_NAMES[predicted_class_idx]
+
+        return {
+            "class": predicted_class,
+            "class_idx": predicted_class_idx,
+            "probability": avg_probs[predicted_class_idx].item(),
+            "all_probabilities": {
+                name: avg_probs[idx].item() for idx, name in enumerate(self.CLASS_NAMES)
+            },
+            "is_dangerous": predicted_class in self.DANGEROUS_CLASSES,
+            "description": self.CLASS_DESCRIPTIONS[predicted_class],
+            "window_predictions": probs.cpu().numpy().tolist(),
+        }
+    
+    @torch.no_grad()
+    def predict_single(self, signal: torch.Tensor) -> dict:
+        """Run inference on a single ECG window.
+        
+        Args:
+            signal (torch.Tensor): Tensor of shape `(input_channels, seq_length)`
+            
+        Returns:
+            dict: Dictionary with keys: `class`, `class_idx`, `probability`,
+            `all_probabilities`, `is_dangerous`, `description`.
+        
+        """
+        self.model.eval()
+
+        if signal.dim() == 2:
+            signal = signal.unsqueeze(0)
+
+        signal = signal.to(self.device)
+        logits = self.model(signal)
+        probs = F.softmax(logits, dim=1)[0]
+
+        predicted_class_idx = int(torch.argmax(probs).item())
+        predicted_class = self.CLASS_NAMES[predicted_class_idx]
+
+        return {
+            "class": predicted_class,
+            "class_idx": predicted_class_idx,
+            "probability": probs[predicted_class_idx].item(),
+            "all_probabilities": {
+                name: probs[idx].item() for idx, name in enumerate(self.CLASS_NAMES)
+            },
+            "is_dangerous": predicted_class in self.DANGEROUS_CLASSES,
+            "description": self.CLASS_DESCRIPTIONS[predicted_class],
+        }
+    
+
+def create_model(
+    input_channels: int = 12,
+    num_classes: int = 5,
+    pretrained_path: str | None = None,
+) -> ResNet1D:
+    """Create a ResNet1D model with optional pretrained weights.
+    
+    Args:
+        input_channels (int): Number of input channels (ECG leads).
+        num_classes (int): Number of output classes.
+        pretrained_path (str | None): Path to a checkpoint file.
+            When provided, weights are loaded before the model is returned.
+        
+    Returns:
+        ResNet1D: An instance of the ResNet1D model, optionally with loaded weights.
+    
+    """
+    model = ResNet1D(
+        input_channels=input_channels,
+        num_classes=num_classes,
+        base_filters=64,
+        kernel_size=7,
+        num_blocks=[2, 2, 2, 2],
+        dropout=0.2,
+    )
+
+    if pretrained_path:
+        checkpoint = torch.load(pretrained_path, map_location="cpu", weights_only=False)
+        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            model.load_state_dict(checkpoint)
+
+    return model

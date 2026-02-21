@@ -13,7 +13,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import ClassVar
 
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
@@ -32,7 +31,7 @@ class ECGProducer:
 
     """
 
-    HOSPITALS: ClassVar[list[dict]] = [
+    HOSPITALS = [
         {"id": "HOSP_001", "name": "University Hospital Krakow", "city": "Krakow"},
         {"id": "HOSP_002", "name": "Clinical Hospital Warsaw", "city": "Warsaw"},
         {"id": "HOSP_003", "name": "Cardiology Center Poznan", "city": "Poznan"},
