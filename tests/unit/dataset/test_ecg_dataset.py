@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from ecg.dataset.ecg_dataset import ECGDataset, create_dataloaders
+from ecg.dataset.ecg_dataset import ECGAugmentation, ECGDataset, create_dataloaders
 
 _RDSAMP = "ecg.dataset.ecg_dataset.wfdb.rdsamp"
 
@@ -75,6 +75,12 @@ class TestECGDataset:
         assert isinstance(sample["ecg_id"], int)
         assert isinstance(sample["signal"], list)
         assert isinstance(sample["label"], int)
+    
+    def test_get_class_weights(self, csv_mocks, tmp_path):
+        ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
+        weights = ds.get_class_weights()
+        assert isinstance(weights, torch.Tensor)
+        assert len(weights) == 5
 
 
 class TestCreateDataloaders:
@@ -89,3 +95,36 @@ class TestCreateDataloaders:
         assert len(train_loader.dataset) >= 0
         assert len(val_loader.dataset) >= 0
         assert len(test_loader.dataset) >= 0
+
+
+class TestECGAugmentation:
+    def test_default_init(self):
+        aug = ECGAugmentation()
+        assert aug.p == 0.5
+        assert aug.noise_std == 0.05
+
+    def test_output_shape_unchanged(self):
+        aug = ECGAugmentation(p=1.0)
+        x = torch.randn(12, 1000)
+        assert aug(x).shape == x.shape
+
+    def test_p_zero_no_change(self):
+        aug = ECGAugmentation(p=0.0)
+        x = torch.ones(12, 1000)
+        torch.testing.assert_close(aug(x), x)
+
+    def test_p_one_applies_all_augmentations(self):
+        aug = ECGAugmentation(p=1.0, noise_std=0.5, lead_dropout_prob=0.5, time_mask_max_samples=50)
+        x = torch.ones(12, 1000)
+        y = aug(x)
+        assert y.shape == x.shape
+
+    def test_returns_tensor(self):
+        aug = ECGAugmentation()
+        assert isinstance(aug(torch.randn(12, 250)), torch.Tensor)
+
+    def test_amplitude_scaling_changes_values(self):
+        aug = ECGAugmentation(p=1.0, noise_std=0.0, lead_dropout_prob=0.0, time_mask_max_samples=10)
+        x = torch.ones(12, 100)
+        y = aug(x)
+        assert y.shape == x.shape

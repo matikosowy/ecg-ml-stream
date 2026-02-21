@@ -8,6 +8,7 @@ import torch
 
 from ecg.ml.metrics import (
     AverageMeter,
+    EarlyStopping,
     MetricsCalculator,
     format_metrics,
     load_training_history,
@@ -117,3 +118,33 @@ class TestSaveLoadTrainingHistory:
         path = str(tmp_path / "nested" / "dir" / "history.json")
         save_training_history({"x": [1]}, path)
         assert (tmp_path / "nested" / "dir" / "history.json").exists()
+
+
+class TestEarlyStopping:
+    def test_patience(self):
+        es = EarlyStopping(patience=3, mode="min")
+        assert not es(10.0)
+        assert not es(9.0)
+        assert not es(9.5)  # counter=1
+        assert not es(9.5)  # counter=2
+        assert es(9.5)  # counter=3 - stop
+
+    def test_reset_on_improvement(self):
+        es = EarlyStopping(patience=3, mode="min")
+        es(10.0)
+        es(11.0)  # counter=1
+        es(12.0)  # counter=2
+        es(8.0)  # improvement - counter=0
+        assert not es(9.0)  # counter=1
+        assert not es(9.0)  # counter=2
+
+    def test_mode_max(self):
+        es = EarlyStopping(patience=2, mode="max")
+        assert not es(0.5)
+        assert not es(0.6)  # improvement
+        assert not es(0.55)  # counter=1
+        assert es(0.55)  # counter=2 - stop
+
+    def test_first_call_never_stops(self):
+        es = EarlyStopping(patience=1, mode="min")
+        assert not es(999.0)
