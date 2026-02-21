@@ -76,6 +76,13 @@ parametrize-names-type = "tuple"
 "src/ecg/ml/**/*.py" = [
     "PLW2901", # Allow reassignment of variables in training loops (e.g., ".to(device)")
     "PLR2004", # Allow 'magic values' for model architecture
+    "PLR0914", # Allow many statements in training functions
+    "PLR0915", # Allow many variables in training functions
+]
+
+"src/ecg/utils/helpers.py" = [
+    "FBT001", # Allow boolean positional arguments in helper functions
+    "FBT002", # Allow boolean positional arguments in helper functions
 ]
 
 [tool.ruff.lint.pep8-naming]

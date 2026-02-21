@@ -181,3 +181,57 @@ def load_training_history(path: str) -> dict:
     """
     with Path(path).open(encoding="utf-8") as f:
         return json.load(f)
+
+
+class EarlyStopping:
+    """Stop training when a monitored metric stops improving."""
+
+    def __init__(
+        self,
+        patience: int = 10,
+        min_delta: float = 0.0,
+        mode: str = "min",
+    ) -> None:
+        """Initialize EarlyStopping.
+
+        Args:
+            patience: Number of epochs with no improvement before stopping.
+            min_delta: Minimum change to qualify as an improvement.
+            mode: "min" for loss, "max" for accuracy/F1.
+
+        """
+        self.patience = patience
+        self.min_delta = min_delta
+        self.mode = mode
+        self.counter = 0
+        self.best_score: float | None = None
+        self.early_stop = False
+
+    def __call__(self, score: float) -> bool:
+        """Update internal state and return whether training should stop.
+
+        Args:
+            score: Current epoch metric value.
+
+        Returns:
+            True if training should stop, False otherwise.
+
+        """
+        if self.best_score is None:
+            self.best_score = score
+            return False
+
+        if self.mode == "min":
+            improved = score < self.best_score - self.min_delta
+        else:
+            improved = score > self.best_score + self.min_delta
+
+        if improved:
+            self.best_score = score
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+
+        return self.early_stop

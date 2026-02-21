@@ -5,7 +5,6 @@ Copyright 2026 Mateusz Golebiewski
 
 import argparse
 import json
-import logging
 import random
 import threading
 import time
@@ -20,8 +19,9 @@ from kafka.errors import KafkaError
 
 from ecg.dataset.ecg_dataset import ECGDataset
 from ecg.utils.constants import ECG_LEAD_NAMES
+from ecg.utils.helpers import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging(name="producer")
 
 
 class ECGProducer:
