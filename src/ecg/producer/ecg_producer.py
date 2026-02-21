@@ -13,6 +13,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
+from typing import ClassVar
 
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
@@ -29,9 +30,12 @@ class ECGProducer:
     Each thread represents one hospital and sends one PTB-XL record every `interval_sec`
     seconds to the specified Kafka topic.
 
+    Attributes:
+        HOSPITALS (ClassVar[list[dict]]): List of simulated hospitals with IDs
+
     """
 
-    HOSPITALS = [
+    HOSPITALS: ClassVar[list[dict]] = [
         {"id": "HOSP_001", "name": "University Hospital Krakow", "city": "Krakow"},
         {"id": "HOSP_002", "name": "Clinical Hospital Warsaw", "city": "Warsaw"},
         {"id": "HOSP_003", "name": "Cardiology Center Poznan", "city": "Poznan"},

@@ -8,11 +8,11 @@ import torch.nn.functional as F  # noqa: N812 - import as F is a common PyTorch 
 from torch import nn
 
 from ecg.utils.constants import (
+    CLASS_DESCRIPTIONS,
+    CLASS_NAMES,
+    DANGEROUS_CLASSES,
     NUM_CLASSES,
     NUM_LEADS,
-    CLASS_NAMES,
-    CLASS_DESCRIPTIONS,
-    DANGEROUS_CLASSES,
 )
 
 
@@ -303,12 +303,12 @@ class ECGClassifier:
 
         if model_path:
             self.load(model_path)
-        
+
         self.model.eval()
-    
+
     def load(self, path: str) -> None:
         """Load model weights from a checkpoint file.
-        
+
         Args:
             path (str): Path to the checkpoint file.
 
@@ -328,7 +328,7 @@ class ECGClassifier:
         metrics: dict | None = None,
     ) -> None:
         """Save model weights to a checkpoint file.
-        
+
         Args:
             path (str): Path to save the checkpoint file.
             optimizer (torch.optim.Optimizer | None): Optimizer to save (optional).
@@ -346,20 +346,20 @@ class ECGClassifier:
             checkpoint["epoch"] = epoch
         if metrics:
             checkpoint["metrics"] = metrics
-        
+
         torch.save(checkpoint, path)
 
     @torch.no_grad()
     def predict_windows(self, windows: torch.Tensor) -> dict:
         """Run inference on multiple overlapping windows with soft voting.
-        
+
         Args:
             windows (torch.Tensor): Tensor of shape `(num_windows, input_channels, seq_length)`
-            
+
         Returns:
             dict: Dictionary with keys: `class`, `class_idx`, `probability`,
             `all_probabilities`, `is_dangerous`, `description`, `window_predictions`.
-        
+
         """
         self.model.eval()
         windows = windows.to(self.device)
@@ -382,18 +382,18 @@ class ECGClassifier:
             "description": self.CLASS_DESCRIPTIONS[predicted_class],
             "window_predictions": probs.cpu().numpy().tolist(),
         }
-    
+
     @torch.no_grad()
     def predict_single(self, signal: torch.Tensor) -> dict:
         """Run inference on a single ECG window.
-        
+
         Args:
             signal (torch.Tensor): Tensor of shape `(input_channels, seq_length)`
-            
+
         Returns:
             dict: Dictionary with keys: `class`, `class_idx`, `probability`,
             `all_probabilities`, `is_dangerous`, `description`.
-        
+
         """
         self.model.eval()
 
@@ -417,7 +417,7 @@ class ECGClassifier:
             "is_dangerous": predicted_class in self.DANGEROUS_CLASSES,
             "description": self.CLASS_DESCRIPTIONS[predicted_class],
         }
-    
+
 
 def create_model(
     input_channels: int = 12,
@@ -425,16 +425,16 @@ def create_model(
     pretrained_path: str | None = None,
 ) -> ResNet1D:
     """Create a ResNet1D model with optional pretrained weights.
-    
+
     Args:
         input_channels (int): Number of input channels (ECG leads).
         num_classes (int): Number of output classes.
         pretrained_path (str | None): Path to a checkpoint file.
             When provided, weights are loaded before the model is returned.
-        
+
     Returns:
         ResNet1D: An instance of the ResNet1D model, optionally with loaded weights.
-    
+
     """
     model = ResNet1D(
         input_channels=input_channels,

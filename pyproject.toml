@@ -73,6 +73,10 @@ parametrize-names-type = "tuple"
     "PLR2004", # Allow 'magic values' for PTB-XL stratified splits and sampling rates
 ]
 
+"src/ecg/ml/**/*.py" = [
+    "PLW2901", # Allow reassignment of variables in training loops (e.g., ".to(device)")
+    "PLR2004", # Allow 'magic values' for model architecture
+]
 
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["df"]

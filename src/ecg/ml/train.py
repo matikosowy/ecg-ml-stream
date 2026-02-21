@@ -3,15 +3,15 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
-
 import torch
-import torch.nn as nn
 from sklearn.metrics import f1_score
+from torch import nn
 from tqdm import tqdm
 
 from ecg.dataset import ECGDataset
+from ecg.ml.metrics import AverageMeter, MetricsCalculator
 from ecg.ml.model import ECGClassifier
-from ecg.metrics import MetricsCalculator, AverageMeter
+
 
 def train_epoch(
     model: nn.Module,
@@ -22,7 +22,7 @@ def train_epoch(
     epoch: int,
 ) -> dict:
     """Run one training epoch over the full training set.
-    
+
     Args:
         model (nn.Module): The ResNet1D model to train.
         train_loader (torch.utils.data.DataLoader): DataLoader for the training set.
@@ -30,10 +30,10 @@ def train_epoch(
         optimizer (torch.optim.Optimizer): Optimizer.
         device (torch.device): Device to run the training on.
         epoch (int): Current epoch number for logging purposes.
-        
+
     Returns:
         dict: Dictionary of training metrics for this epoch.
-    
+
     """
     model.train()
     metrics = MetricsCalculator()
@@ -62,6 +62,7 @@ def train_epoch(
     results["loss"] = loss_meter.avg
     return results
 
+
 @torch.no_grad()
 def validate(
     model: nn.Module,
@@ -71,17 +72,17 @@ def validate(
     epoch: int,
 ) -> dict:
     """Evaluate the model on a validation/test DataLoader.
-    
+
     Args:
         model (nn.Module): The ResNet1D model to evaluate.
         val_loader (torch.utils.data.DataLoader): DataLoader for the validation/test set.
         criterion (nn.Module): Loss function.
         device (torch.device): Device to run the evaluation on (CPU or ).
         epoch (int): Current epoch number for logging purposes.
-        
+
     Returns:
         dict: Dictionary of validation metrics for this epoch.
-    
+
     """
     model.eval()
     metrics = MetricsCalculator()
@@ -104,6 +105,7 @@ def validate(
     results["loss"] = loss_meter.avg
     return results
 
+
 @torch.no_grad()
 def evaluate_with_voting(
     model: nn.Module,
@@ -112,16 +114,16 @@ def evaluate_with_voting(
     num_samples: int | None = None,
 ) -> dict:
     """Evaluate accuracy and F1 using 7-window soft voting per record.
-    
+
     Args:
         model (nn.Module): The ResNet1D model to evaluate.
         dataset (ECGDataset): ECGDataset providing `get_record_windows` method.
         device (torch.device): Device to run the evaluation on.
         num_samples (int | None): Number of records to evaluate. If None, evaluate all records.
-        
+
     Returns:
         dict: Dictionary containing `voting_accuracy`, `voting_f1_macro`, `total_records`.
-    
+
     """
     model.eval()
     classifier = ECGClassifier()
@@ -140,7 +142,7 @@ def evaluate_with_voting(
         result = classifier.predict_windows(windows)
         predictions.append(result["class_idx"])
         targets.append(label)
-    
+
     n_correct = sum(p == t for p, t in zip(predictions, targets, strict=True))
     accuracy = n_correct / len(targets)
     f1_macro = f1_score(targets, predictions, average="macro")
@@ -150,4 +152,3 @@ def evaluate_with_voting(
         "voting_f1_macro": f1_macro,
         "total_records": len(targets),
     }
-
