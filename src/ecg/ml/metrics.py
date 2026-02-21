@@ -96,7 +96,9 @@ class MetricsCalculator:
             ),
         }
 
-        f1_per_class = f1_score(targets, preds, average=None, zero_division=0)
+        f1_per_class = f1_score(
+            targets, preds, average=None, zero_division=0, labels=list(range(len(self.CLASS_NAMES)))
+        )
         for idx, class_name in enumerate(self.CLASS_NAMES):
             metrics[f"f1_{class_name}"] = f1_per_class[idx]
 

@@ -252,7 +252,7 @@ def evaluate_with_voting(
     predictions = []
     targets = []
 
-    record_ids = dataset.records.idex.tolist()
+    record_ids = dataset.records.index.tolist()
     if num_samples:
         record_ids = record_ids[:num_samples]
 
@@ -314,7 +314,7 @@ def main() -> None:
     run_dir = output_dir / f"run_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    logger = setup_logging(str(run_dir / "training.log"), "training")
+    logger = setup_logging(str(run_dir), "training")
     logger.info("Arguments: %s", args)
 
     data_path = Path(args.data_path)
@@ -471,7 +471,7 @@ def main() -> None:
                 num_samples=200,
             )
             logger.info(
-                "Voting F1 (val subset): acc=%.4 f1=%.4f",
+                "Voting F1 (val subset): acc=%.4f f1=%.4f",
                 voting_metrics["voting_accuracy"],
                 voting_metrics["voting_f1_macro"],
             )

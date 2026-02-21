@@ -75,7 +75,7 @@ class TestECGDataset:
         assert isinstance(sample["ecg_id"], int)
         assert isinstance(sample["signal"], list)
         assert isinstance(sample["label"], int)
-    
+
     def test_get_class_weights(self, csv_mocks, tmp_path):
         ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
         weights = ds.get_class_weights()
