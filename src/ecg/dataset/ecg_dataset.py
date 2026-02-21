@@ -20,6 +20,9 @@ from ecg.utils.helpers import normalize_signal
 class ECGDataset(Dataset):
     """PyTorch Dataset for the PTB-XL ECG dataset."""
 
+    CLASS_NAMES = CLASS_NAMES
+    SUPERCLASS_MAPPING = SUPERCLASS_MAPPING
+
     def __init__(
         self,
         data_path: str,
@@ -82,7 +85,7 @@ class ECGDataset(Dataset):
             for code, confidence in scp_codes.items():
                 if code in scp_df.index and confidence > 0:
                     superclass = scp_df.loc[code, "diagnostic_class"]
-                    if pd.notna(superclass) and superclass in SUPERCLASS_MAPPING:
+                    if pd.notna(superclass) and superclass in self.SUPERCLASS_MAPPING:
                         superclasses.append(superclass)
 
             for superclass in SUPERCLASS_PRIORITY:
@@ -93,7 +96,7 @@ class ECGDataset(Dataset):
         df["superclass"] = df["scp_codes"].apply(get_superclass)
 
         df = df[df["superclass"].notna()]
-        df["label"] = df["superclass"].map(SUPERCLASS_MAPPING)
+        df["label"] = df["superclass"].map(self.SUPERCLASS_MAPPING)
 
         return df
 
@@ -249,7 +252,8 @@ class ECGDataset(Dataset):
             "ecg_id": int(ecg_id),
             "signal": signal.tolist(),
             "label": int(row["label"]),
-            "label_name": CLASS_NAMES[int(row["label"])],
+            "label_name": self.CLASS_NAMES[int(row["label"])],
+            "superclass": self.SUPERCLASS_MAPPING[int(row["label"])],
             "patient_id": (int(row["patient_id"]) if pd.notna(row["patient_id"]) else None),
             "age": int(row["age"]) if pd.notna(row["age"]) else None,
             "sex": int(row["sex"]) if pd.notna(row["sex"]) else None,
