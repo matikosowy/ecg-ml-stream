@@ -25,7 +25,13 @@ from ecg_ml_stream.ml.metrics import (
 )
 from ecg_ml_stream.ml.model import ECGClassifier, ResNet1D
 from ecg_ml_stream.utils.constants import CLASS_NAMES
-from ecg_ml_stream.utils.helpers import count_parameters, get_device, save_checkpoint, set_seed, setup_logging
+from ecg_ml_stream.utils.helpers import (
+    count_parameters,
+    get_device,
+    save_checkpoint,
+    set_seed,
+    setup_logging,
+)
 
 
 def parse_args() -> argparse.Namespace:

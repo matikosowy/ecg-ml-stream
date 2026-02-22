@@ -3,6 +3,7 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
+from collections.abc import Generator
 from unittest.mock import patch
 
 import numpy as np
@@ -75,7 +76,7 @@ def fake_sample() -> dict:
 
 
 @pytest.fixture
-def producer(fake_sample: dict) -> ECGProducer:
+def producer(fake_sample: dict) -> Generator[ECGProducer, None, None]:
     """Return an ECGProducer with mocked Kafka and dataset dependencies.
 
     Returns:
