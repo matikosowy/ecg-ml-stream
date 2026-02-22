@@ -15,7 +15,7 @@ from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 
-from ecg.dataset import ECGDataset
+from ecg.dataset.ecg_dataset import ECGAugmentation, ECGDataset
 from ecg.ml.metrics import (
     AverageMeter,
     EarlyStopping,
@@ -196,7 +196,7 @@ def validate(
         model (nn.Module): The ResNet1D model to evaluate.
         val_loader (torch.utils.data.DataLoader): DataLoader for the validation/test set.
         criterion (nn.Module): Loss function.
-        device (torch.device): Device to run the evaluation on (CPU or ).
+        device (torch.device): Device to run the evaluation on (CPU or GPU).
         epoch (int): Current epoch number for logging purposes.
 
     Returns:
@@ -252,7 +252,7 @@ def evaluate_with_voting(
     predictions = []
     targets = []
 
-    record_ids = dataset.records.idex.tolist()
+    record_ids = dataset.records.index.tolist()
     if num_samples:
         record_ids = record_ids[:num_samples]
 
@@ -314,7 +314,7 @@ def main() -> None:
     run_dir = output_dir / f"run_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    logger = setup_logging(str(run_dir / "training.log"), "training")
+    logger = setup_logging(str(run_dir), "training")
     logger.info("Arguments: %s", args)
 
     data_path = Path(args.data_path)
@@ -324,12 +324,15 @@ def main() -> None:
 
     logger.info("Loading datasets...")
 
+    augmentation = ECGAugmentation()
+
     train_dataset = ECGDataset(
         data_path=str(data_path),
         sampling_rate=args.sampling_rate,
         window_size=args.window_size,
         window_stride=args.window_stride,
         split="train",
+        transforms=augmentation,
     )
     val_dataset = ECGDataset(
         data_path=str(data_path),
@@ -385,7 +388,10 @@ def main() -> None:
 
     logger.info("Model: %d parameters", count_parameters(model))
 
-    criterion = nn.CrossEntropyLoss()
+    class_weights = train_dataset.get_class_weights().to(device)
+    logger.info("Class weights: %s", class_weights)
+
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr,
@@ -397,7 +403,7 @@ def main() -> None:
         factor=0.5,
         patience=5,
     )
-    early_stopping = EarlyStopping(args.patience, "max")
+    early_stopping = EarlyStopping(args.patience, mode="max")
 
     start_epoch = 0
     best_f1 = 0.0
@@ -465,7 +471,7 @@ def main() -> None:
                 num_samples=200,
             )
             logger.info(
-                "Voting F1 (val subset): acc=%.4 f1=%.4f",
+                "Voting F1 (val subset): acc=%.4f f1=%.4f",
                 voting_metrics["voting_accuracy"],
                 voting_metrics["voting_f1_macro"],
             )

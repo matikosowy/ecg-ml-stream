@@ -3,9 +3,21 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
-import numpy as np
+from unittest.mock import patch
 
-from ecg.utils.helpers import normalize_signal
+import numpy as np
+import pytest
+import torch
+
+from ecg.ml.model import ResNet1D
+from ecg.utils.helpers import (
+    count_parameters,
+    get_device,
+    normalize_signal,
+    save_checkpoint,
+    set_seed,
+    setup_logging,
+)
 
 
 class TestNormalizeSignal:
@@ -25,3 +37,86 @@ class TestNormalizeSignal:
         signal = np.ones((12, 250), dtype=np.float32)
         normed = normalize_signal(signal)
         assert not np.any(np.isnan(normed))
+
+
+class TestSetSeed:
+    def test_runs_without_error(self):
+        set_seed(42)
+
+    def test_different_seeds_give_different_results(self):
+        set_seed(0)
+        a = torch.randn(10)
+        set_seed(1)
+        b = torch.randn(10)
+        assert not torch.allclose(a, b)
+
+
+class TestSetupLogging:
+    def test_returns_logger(self, tmp_path):
+        logger = setup_logging(str(tmp_path), name="test_run")
+        assert logger is not None
+        assert logger.name == "test_run"
+
+
+class TestGetDevice:
+    def test_returns_torch_device(self):
+        device = get_device()
+        assert isinstance(device, torch.device)
+
+    def test_device_is_valid(self):
+        device = get_device()
+        assert device.type in ("cpu", "cuda", "mps")
+
+    @pytest.mark.parametrize(
+        ("cuda", "mps", "expected"),
+        [
+            (True, True, "cuda"),
+            (False, True, "mps"),
+            (False, False, "cpu"),
+        ],
+    )
+    def test_device_selection(self, cuda, mps, expected):
+        with (
+            patch("torch.cuda.is_available", return_value=cuda),
+            patch("torch.cuda.get_device_name", return_value="Test GPU"),
+            patch("torch.backends.mps.is_available", return_value=mps),
+        ):
+            device = get_device()
+        assert device.type == expected
+
+
+class TestCountParameters:
+    def test_positive_count(self):
+        model = ResNet1D(input_channels=12, num_classes=5)
+        count = count_parameters(model)
+        assert count > 0
+
+    def test_zero_params_frozen(self):
+        model = ResNet1D(input_channels=12, num_classes=5)
+        for p in model.parameters():
+            p.requires_grad = False
+        assert count_parameters(model) == 0
+
+
+class TestSaveCheckpoint:
+    def test_saves_expected_keys(self, tmp_path):
+        model = ResNet1D(input_channels=12, num_classes=5)
+        optimizer = torch.optim.Adam(model.parameters())
+        path = str(tmp_path / "checkpoint.pt")
+
+        save_checkpoint(model, optimizer, epoch=3, metrics={"f1": 0.85}, path=path)
+
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+        assert checkpoint["epoch"] == 3
+        assert checkpoint["metrics"]["f1"] == pytest.approx(0.85)
+        assert "model_state_dict" in checkpoint
+        assert "optimizer_state_dict" in checkpoint
+
+    def test_save_is_best_creates_copy(self, tmp_path):
+        model = ResNet1D(input_channels=12, num_classes=5)
+        optimizer = torch.optim.Adam(model.parameters())
+        path = str(tmp_path / "ckpt.pt")
+
+        save_checkpoint(model, optimizer, epoch=1, metrics={}, path=path, is_best=True)
+
+        assert (tmp_path / "best_model.pt").exists()

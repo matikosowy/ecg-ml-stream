@@ -17,3 +17,37 @@ docker run -it --rm \
     -v ${PWD}:/app \
     ecg-ml-stream-dev /bin/bash
 ```
+
+---
+
+### Run producer
+```
+python -m ecg_ml.producer.ecg_producer.py \
+    --bootstrap-servers localhost:29092 \
+    --topic ecg-pending \
+    --data-path data/ptb-xl-1.0.3 \
+    --num-threads 4 \
+    --interval 10.0 \
+    --sampling-rate 100
+```
+
+---
+
+### Run training
+```
+python -m ecg.ml.train \
+    --data-path data/ptb-xl-1.0.3 \
+    --output-dir models \
+    --epochs 20 \
+    --batch-size 64
+```
+
+### Resume training
+```
+python -m ecg.ml.train \
+    --data-path data/ptb-xl-1.0.3 \
+    --output-dir models \
+    --epochs 50 \
+    --batch-size 64 \
+    --resume models/run-xyz/checkpoint.pt
+```

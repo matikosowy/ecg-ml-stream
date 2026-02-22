@@ -34,8 +34,8 @@ class ECGDataset(Dataset):
         self,
         data_path: str,
         sampling_rate: int = 100,
-        window_size_sec: float = 2.5,
-        windows_stride_sec: float = 1.25,
+        window_size: float = 2.5,
+        window_stride: float = 1.25,
         split: str = "train",
         transforms: Callable | None = None,
     ) -> None:
@@ -44,9 +44,9 @@ class ECGDataset(Dataset):
         Args:
             data_path (str): Root directory of the PTB-XL dataset.
             sampling_rate (int): Sampling rate of the ECG signals. Defaults to 100 Hz.
-            window_size_sec (float): Duration of a training window in seconds.
+            window_size (float): Duration of a training window in seconds.
                 Defaults to 2.5 seconds.
-            windows_stride_sec (float): Stride between training windows in seconds.
+            window_stride (float): Stride between training windows in seconds.
                 Defaults to 1.25 seconds.
             split (str): Dataset split to use ('train', 'val', 'test'). Defaults to 'train'.
             transforms (callable): Optional. Transformations to apply to each window.
@@ -54,8 +54,8 @@ class ECGDataset(Dataset):
         """
         self.data_path = Path(data_path)
         self.sampling_rate = sampling_rate
-        self.window_size = int(window_size_sec * sampling_rate)
-        self.windows_stride = int(windows_stride_sec * sampling_rate)
+        self.window_size = int(window_size * sampling_rate)
+        self.window_stride = int(window_stride * sampling_rate)
         self.split = split
         self.transforms = transforms
 
@@ -142,7 +142,7 @@ class ECGDataset(Dataset):
             start = 0
             while start + self.window_size <= signal_length:
                 windows.append((ecg_id, start, row["label"]))
-                start += self.windows_stride
+                start += self.window_stride
 
         return windows
 
@@ -232,7 +232,7 @@ class ECGDataset(Dataset):
         while start + self.window_size <= signal_length:
             window = normalize_signal(signal[:, start : start + self.window_size])
             windows.append(window)
-            start += self.windows_stride
+            start += self.window_stride
 
         return torch.from_numpy(np.stack(windows, axis=0)), label
 
@@ -264,6 +264,19 @@ class ECGDataset(Dataset):
             "age": int(row["age"]) if pd.notna(row["age"]) else None,
             "sex": int(row["sex"]) if pd.notna(row["sex"]) else None,
         }
+
+    def get_class_weights(self) -> torch.Tensor:
+        """Compute inverse-frequency class weights for the training split.
+
+        Returns:
+            torch.Tensor: Tensor of shape (num_classes,) with per-class weights.
+
+        """
+        labels = [w[2] for w in self.window_index]
+        class_counts = np.bincount(labels, minlength=5)
+        total = len(labels)
+        weights = total / (5 * class_counts + 1e-8)
+        return torch.FloatTensor(weights)
 
 
 def create_dataloaders(
@@ -312,3 +325,71 @@ def create_dataloaders(
     )
 
     return train_loader, val_loader, test_loader
+
+
+class ECGAugmentation:
+    """On-the-fly ECG signal augmentation applied during training."""
+
+    def __init__(
+        self,
+        amplitude_scale_range: tuple[float, float] = (0.8, 1.2),
+        noise_std: float = 0.05,
+        lead_dropout_prob: float = 0.1,
+        time_mask_max_samples: int = 25,
+        p: float = 0.5,
+    ) -> None:
+        """Initialize ECGAugmentation.
+
+        Args:
+            amplitude_scale_range (tuple[float, float]): Range for random amplitude scaling.
+                Defaults to (0.8, 1.2).
+            noise_std (float): Standard deviation of the added Gaussian noise. Defaults to 0.05.
+            lead_dropout_prob (float): Probability of dropping out each lead. Defaults to 0.1.
+            time_mask_max_samples (int): Maximum length of time masking in samples. Defaults to 25.
+            p (float): Probability of applying augmentation to a sample. Defaults to 0.5.
+
+        """
+        self.amplitude_scale_range = amplitude_scale_range
+        self.noise_std = noise_std
+        self.lead_dropout_prob = lead_dropout_prob
+        self.time_mask_max_samples = time_mask_max_samples
+        self.p = p
+        self._rng = np.random.default_rng()
+
+    def __call__(self, signal: torch.Tensor) -> torch.Tensor:
+        """Apply random augmentations to a signal tensor.
+
+        Args:
+            signal (torch.Tensor): Input ECG signal tensor of shape (12, samples).
+
+        Returns:
+            torch.Tensor: Augmented ECG signal tensor of shape (12, samples).
+
+        """
+        x = signal.clone()
+
+        # Amplitude scaling
+        if self._rng.random() < self.p:
+            scale = self._rng.uniform(*self.amplitude_scale_range)
+            x *= scale
+
+        # Additive Gaussian noise
+        if self._rng.random() < self.p:
+            noise = torch.randn_like(x) * self.noise_std
+            x += noise
+
+        # Lead dropout
+        if self._rng.random() < self.p:
+            mask = torch.from_numpy(
+                self._rng.random(x.shape[0]) > self.lead_dropout_prob,
+            ).float()
+            x *= mask.unsqueeze(1)
+
+        # Time masking
+        if self._rng.random() < self.p:
+            seq_len = x.shape[1]
+            mask_len = self._rng.integers(1, self.time_mask_max_samples + 1)
+            start = self._rng.integers(0, max(1, seq_len - mask_len))
+            x[:, start : start + mask_len] = 0.0
+
+        return x
