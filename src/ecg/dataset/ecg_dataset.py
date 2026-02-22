@@ -34,8 +34,8 @@ class ECGDataset(Dataset):
         self,
         data_path: str,
         sampling_rate: int = 100,
-        window_size_sec: float = 2.5,
-        windows_stride_sec: float = 1.25,
+        window_size: float = 2.5,
+        window_stride: float = 1.25,
         split: str = "train",
         transforms: Callable | None = None,
     ) -> None:
@@ -44,9 +44,9 @@ class ECGDataset(Dataset):
         Args:
             data_path (str): Root directory of the PTB-XL dataset.
             sampling_rate (int): Sampling rate of the ECG signals. Defaults to 100 Hz.
-            window_size_sec (float): Duration of a training window in seconds.
+            window_size (float): Duration of a training window in seconds.
                 Defaults to 2.5 seconds.
-            windows_stride_sec (float): Stride between training windows in seconds.
+            window_stride (float): Stride between training windows in seconds.
                 Defaults to 1.25 seconds.
             split (str): Dataset split to use ('train', 'val', 'test'). Defaults to 'train'.
             transforms (callable): Optional. Transformations to apply to each window.
@@ -54,8 +54,8 @@ class ECGDataset(Dataset):
         """
         self.data_path = Path(data_path)
         self.sampling_rate = sampling_rate
-        self.window_size = int(window_size_sec * sampling_rate)
-        self.windows_stride = int(windows_stride_sec * sampling_rate)
+        self.window_size = int(window_size * sampling_rate)
+        self.window_stride = int(window_stride * sampling_rate)
         self.split = split
         self.transforms = transforms
 
@@ -142,7 +142,7 @@ class ECGDataset(Dataset):
             start = 0
             while start + self.window_size <= signal_length:
                 windows.append((ecg_id, start, row["label"]))
-                start += self.windows_stride
+                start += self.window_stride
 
         return windows
 
@@ -232,7 +232,7 @@ class ECGDataset(Dataset):
         while start + self.window_size <= signal_length:
             window = normalize_signal(signal[:, start : start + self.window_size])
             windows.append(window)
-            start += self.windows_stride
+            start += self.window_stride
 
         return torch.from_numpy(np.stack(windows, axis=0)), label
 

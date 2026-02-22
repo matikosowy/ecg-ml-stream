@@ -196,7 +196,7 @@ def validate(
         model (nn.Module): The ResNet1D model to evaluate.
         val_loader (torch.utils.data.DataLoader): DataLoader for the validation/test set.
         criterion (nn.Module): Loss function.
-        device (torch.device): Device to run the evaluation on (CPU or ).
+        device (torch.device): Device to run the evaluation on (CPU or GPU).
         epoch (int): Current epoch number for logging purposes.
 
     Returns:
