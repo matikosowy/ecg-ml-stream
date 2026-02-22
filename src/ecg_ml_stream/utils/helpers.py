@@ -59,13 +59,20 @@ def setup_logging(log_dir: str = "logs", name: str = "training") -> logging.Logg
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 - No timezone needed
     log_file = log_path / f"{name}_{timestamp}.log"
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
-    )
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
 
-    return logging.getLogger(name)
+    if not logger.handlers:
+        fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(fmt)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(fmt)
+        logger.addHandler(file_handler)
+        logger.addHandler(stream_handler)
+        logger.propagate = False
+
+    return logger
 
 
 def get_device() -> torch.device:
@@ -75,7 +82,7 @@ def get_device() -> torch.device:
         torch.device: CUDA if available, then MPS (Apple Silicon), then CPU.
 
     """
-    logger = setup_logging(name="device-setup")
+    logger = logging.getLogger(__name__)
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
