@@ -314,7 +314,7 @@ def main() -> None:
     run_dir = output_dir / f"run_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    logger = setup_logging(str(run_dir), "training")
+    logger = setup_logging(str(run_dir / "logs"), "training")
     logger.info("Arguments: %s", args)
 
     data_path = Path(args.data_path)
