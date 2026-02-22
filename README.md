@@ -22,7 +22,7 @@ docker run -it --rm \
 
 ### Run producer
 ```
-python -m ecg_ml.producer.ecg_producer.py \
+python -m ecg.producer.ecg_producer.py \
     --bootstrap-servers localhost:29092 \
     --topic ecg-pending \
     --data-path data/ptb-xl-1.0.3 \

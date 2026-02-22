@@ -8,9 +8,9 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from ecg.dataset.ecg_dataset import ECGAugmentation, ECGDataset, create_dataloaders
+from ecg_ml_stream.dataset.ecg_dataset import ECGAugmentation, ECGDataset, create_dataloaders
 
-_RDSAMP = "ecg.dataset.ecg_dataset.wfdb.rdsamp"
+_RDSAMP = "ecg_ml_stream.dataset.ecg_dataset.wfdb.rdsamp"
 
 
 class TestECGDataset:

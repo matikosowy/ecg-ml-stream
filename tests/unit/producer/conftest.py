@@ -8,10 +8,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from ecg.producer.ecg_producer import ECGProducer
+from ecg_ml_stream.producer.ecg_producer import ECGProducer
 
-_KAFKA_PRODUCER = "ecg.producer.ecg_producer.KafkaProducer"
-_ECG_DATASET = "ecg.producer.ecg_producer.ECGDataset"
+_KAFKA_PRODUCER = "ecg_ml_stream.producer.ecg_producer.KafkaProducer"
+_ECG_DATASET = "ecg_ml_stream.producer.ecg_producer.ECGDataset"
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip --no-cache-dir install --upgrade pip setuptools wheel
 
 COPY pyproject.toml .
-RUN mkdir -p "src/ecg" \
+RUN mkdir -p "src/ecg_ml_stream" \
     && pip install --no-cache-dir ".[dev]" \
     && rm -rf "src"
 

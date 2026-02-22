@@ -17,9 +17,9 @@ from typing import ClassVar
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 
-from ecg.dataset.ecg_dataset import ECGDataset
-from ecg.utils.constants import ECG_LEAD_NAMES
-from ecg.utils.helpers import setup_logging
+from ecg_ml_stream.dataset.ecg_dataset import ECGDataset
+from ecg_ml_stream.utils.constants import ECG_LEAD_NAMES
+from ecg_ml_stream.utils.helpers import setup_logging
 
 logger = setup_logging(name="producer")
 

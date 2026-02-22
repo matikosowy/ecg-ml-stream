@@ -9,12 +9,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from kafka.errors import KafkaError
 
-from ecg.producer.ecg_producer import ECGProducer, main
+from ecg_ml_stream.producer.ecg_producer import ECGProducer, main
 
-_KAFKA_PRODUCER = "ecg.producer.ecg_producer.KafkaProducer"
-_ECG_DATASET = "ecg.producer.ecg_producer.ECGDataset"
-_TIME_SLEEP = "ecg.producer.ecg_producer.time.sleep"
-_THREAD_POOL = "ecg.producer.ecg_producer.ThreadPoolExecutor"
+_KAFKA_PRODUCER = "ecg_ml_stream.producer.ecg_producer.KafkaProducer"
+_ECG_DATASET = "ecg_ml_stream.producer.ecg_producer.ECGDataset"
+_TIME_SLEEP = "ecg_ml_stream.producer.ecg_producer.time.sleep"
+_THREAD_POOL = "ecg_ml_stream.producer.ecg_producer.ThreadPoolExecutor"
 
 
 class TestProducerMessage:
@@ -195,14 +195,14 @@ class TestMain:
     def test_main_exits_when_path_missing(self):
         with (
             patch("sys.argv", ["prog", "--data-path", "/nonexistent"]),
-            patch("ecg.producer.ecg_producer.Path.exists", return_value=False),
+            patch("ecg_ml_stream.producer.ecg_producer.Path.exists", return_value=False),
         ):
             main()
 
     def test_main_creates_producer_and_starts(self):
         with (
             patch("sys.argv", ["prog", "--data-path", "/fake"]),
-            patch("ecg.producer.ecg_producer.Path.exists", return_value=True),
+            patch("ecg_ml_stream.producer.ecg_producer.Path.exists", return_value=True),
             patch(_KAFKA_PRODUCER),
             patch(_ECG_DATASET),
             patch.object(ECGProducer, "start"),
@@ -212,7 +212,7 @@ class TestMain:
     def test_main_handles_keyboard_interrupt(self):
         with (
             patch("sys.argv", ["prog", "--data-path", "/fake"]),
-            patch("ecg.producer.ecg_producer.Path.exists", return_value=True),
+            patch("ecg_ml_stream.producer.ecg_producer.Path.exists", return_value=True),
             patch(_KAFKA_PRODUCER),
             patch(_ECG_DATASET),
             patch.object(ECGProducer, "start", side_effect=KeyboardInterrupt),
