@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 import torch
 
-from ecg.ml.model import ResNet1D
-from ecg.utils.helpers import (
+from ecg_ml_stream.ml.model import ResNet1D
+from ecg_ml_stream.utils.helpers import (
     count_parameters,
     get_device,
     normalize_signal,

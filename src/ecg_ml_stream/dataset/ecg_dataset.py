@@ -14,8 +14,8 @@ import torch
 import wfdb
 from torch.utils.data import DataLoader, Dataset
 
-from ecg.utils.constants import CLASS_NAMES, SUPERCLASS_MAPPING, SUPERCLASS_PRIORITY
-from ecg.utils.helpers import normalize_signal
+from ecg_ml_stream.utils.constants import CLASS_NAMES, SUPERCLASS_MAPPING, SUPERCLASS_PRIORITY
+from ecg_ml_stream.utils.helpers import normalize_signal
 
 
 class ECGDataset(Dataset):

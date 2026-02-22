@@ -20,9 +20,16 @@ docker run -it --rm \
 
 ---
 
+### Install project
+```
+pip install .
+```
+
+---
+
 ### Run producer
 ```
-python -m ecg_ml.producer.ecg_producer.py \
+python -m ecg_ml_stream.producer.ecg_producer \
     --bootstrap-servers localhost:29092 \
     --topic ecg-pending \
     --data-path data/ptb-xl-1.0.3 \
@@ -35,7 +42,7 @@ python -m ecg_ml.producer.ecg_producer.py \
 
 ### Run training
 ```
-python -m ecg.ml.train \
+python -m ecg_ml_stream.ml.train \
     --data-path data/ptb-xl-1.0.3 \
     --output-dir models \
     --epochs 20 \
@@ -44,7 +51,7 @@ python -m ecg.ml.train \
 
 ### Resume training
 ```
-python -m ecg.ml.train \
+python -m ecg_ml_stream.ml.train \
     --data-path data/ptb-xl-1.0.3 \
     --output-dir models \
     --epochs 50 \

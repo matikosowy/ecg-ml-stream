@@ -11,8 +11,8 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from ecg.ml.model import ResNet1D
-from ecg.ml.train import (
+from ecg_ml_stream.ml.model import ResNet1D
+from ecg_ml_stream.ml.train import (
     evaluate_with_voting,
     main,
     parse_args,
@@ -20,10 +20,10 @@ from ecg.ml.train import (
     validate,
     voting_prediction,
 )
-from ecg.utils.helpers import save_checkpoint
+from ecg_ml_stream.utils.helpers import save_checkpoint
 
-_ECG_CLASSIFIER = "ecg.ml.train.ECGClassifier"
-_TRAIN = "ecg.ml.train"
+_ECG_CLASSIFIER = "ecg_ml_stream.ml.train.ECGClassifier"
+_TRAIN = "ecg_ml_stream.ml.train"
 
 
 def _fake_metrics(f1_macro: float = 0.4) -> dict:

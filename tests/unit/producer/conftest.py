@@ -3,15 +3,16 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
+from collections.abc import Generator
 from unittest.mock import patch
 
 import numpy as np
 import pytest
 
-from ecg.producer.ecg_producer import ECGProducer
+from ecg_ml_stream.producer.ecg_producer import ECGProducer
 
-_KAFKA_PRODUCER = "ecg.producer.ecg_producer.KafkaProducer"
-_ECG_DATASET = "ecg.producer.ecg_producer.ECGDataset"
+_KAFKA_PRODUCER = "ecg_ml_stream.producer.ecg_producer.KafkaProducer"
+_ECG_DATASET = "ecg_ml_stream.producer.ecg_producer.ECGDataset"
 
 
 @pytest.fixture
@@ -75,7 +76,7 @@ def fake_sample() -> dict:
 
 
 @pytest.fixture
-def producer(fake_sample: dict) -> ECGProducer:
+def producer(fake_sample: dict) -> Generator[ECGProducer, None, None]:
     """Return an ECGProducer with mocked Kafka and dataset dependencies.
 
     Returns:

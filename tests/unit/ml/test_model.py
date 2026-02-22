@@ -6,8 +6,8 @@ Copyright 2026 Mateusz Golebiewski
 import pytest
 import torch
 
-from ecg.ml.model import ECGClassifier, ResNet1D, create_model
-from ecg.utils.constants import CLASS_NAMES, DANGEROUS_CLASSES
+from ecg_ml_stream.ml.model import ECGClassifier, ResNet1D, create_model
+from ecg_ml_stream.utils.constants import CLASS_NAMES, DANGEROUS_CLASSES
 
 
 class TestResNet1D:

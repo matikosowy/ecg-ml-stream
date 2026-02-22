@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-from ecg.utils.constants import CLASS_NAMES
+from ecg_ml_stream.utils.constants import CLASS_NAMES
 
 
 class MetricsCalculator:

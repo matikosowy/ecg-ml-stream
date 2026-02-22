@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F  # noqa: N812 - import as F is a common PyTorch convention
 from torch import nn
 
-from ecg.utils.constants import (
+from ecg_ml_stream.utils.constants import (
     CLASS_DESCRIPTIONS,
     CLASS_NAMES,
     DANGEROUS_CLASSES,

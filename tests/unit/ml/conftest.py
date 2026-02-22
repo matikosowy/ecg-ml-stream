@@ -5,7 +5,7 @@ Copyright 2026 Mateusz Golebiewski
 
 import pytest
 
-from ecg.ml.model import ECGClassifier, ResNet1D
+from ecg_ml_stream.ml.model import ECGClassifier, ResNet1D
 
 
 @pytest.fixture

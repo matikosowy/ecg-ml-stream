@@ -63,7 +63,7 @@ def csv_mocks():
     meta = _make_metadata()
     scp = _make_scp_df()
     side_effect = _csv_side_effect(meta, scp)
-    with patch("ecg.dataset.ecg_dataset.pd.read_csv", side_effect=side_effect):
+    with patch("ecg_ml_stream.dataset.ecg_dataset.pd.read_csv", side_effect=side_effect):
         yield meta, scp
 
 

@@ -6,7 +6,7 @@ Copyright 2026 Mateusz Golebiewski
 import pytest
 import torch
 
-from ecg.ml.metrics import (
+from ecg_ml_stream.ml.metrics import (
     AverageMeter,
     EarlyStopping,
     MetricsCalculator,

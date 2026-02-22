@@ -15,17 +15,23 @@ from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 
-from ecg.dataset.ecg_dataset import ECGAugmentation, ECGDataset
-from ecg.ml.metrics import (
+from ecg_ml_stream.dataset.ecg_dataset import ECGAugmentation, ECGDataset
+from ecg_ml_stream.ml.metrics import (
     AverageMeter,
     EarlyStopping,
     MetricsCalculator,
     format_metrics,
     save_training_history,
 )
-from ecg.ml.model import ECGClassifier, ResNet1D
-from ecg.utils.constants import CLASS_NAMES
-from ecg.utils.helpers import count_parameters, get_device, save_checkpoint, set_seed, setup_logging
+from ecg_ml_stream.ml.model import ECGClassifier, ResNet1D
+from ecg_ml_stream.utils.constants import CLASS_NAMES
+from ecg_ml_stream.utils.helpers import (
+    count_parameters,
+    get_device,
+    save_checkpoint,
+    set_seed,
+    setup_logging,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -314,7 +320,7 @@ def main() -> None:
     run_dir = output_dir / f"run_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    logger = setup_logging(str(run_dir), "training")
+    logger = setup_logging(str(run_dir / "logs"), "training")
     logger.info("Arguments: %s", args)
 
     data_path = Path(args.data_path)

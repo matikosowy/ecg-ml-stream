@@ -69,18 +69,18 @@ parametrize-names-type = "tuple"
     "RUF069",   # Allow float comparisons
 ]
 
-"src/ecg/dataset/ecg_dataset.py" = [
+"src/ecg_ml_stream/dataset/ecg_dataset.py" = [
     "PLR2004", # Allow 'magic values' for PTB-XL stratified splits and sampling rates
 ]
 
-"src/ecg/ml/**/*.py" = [
+"src/ecg_ml_stream/ml/**/*.py" = [
     "PLW2901", # Allow reassignment of variables in training loops (e.g., ".to(device)")
     "PLR2004", # Allow 'magic values' for model architecture
     "PLR0914", # Allow many statements in training functions
     "PLR0915", # Allow many variables in training functions
 ]
 
-"src/ecg/utils/helpers.py" = [
+"src/ecg_ml_stream/utils/helpers.py" = [
     "FBT001", # Allow boolean positional arguments in helper functions
     "FBT002", # Allow boolean positional arguments in helper functions
 ]
