@@ -403,7 +403,7 @@ def main() -> None:
         factor=0.5,
         patience=5,
     )
-    early_stopping = EarlyStopping(args.patience, "max")
+    early_stopping = EarlyStopping(args.patience, mode="max")
 
     start_epoch = 0
     best_f1 = 0.0
