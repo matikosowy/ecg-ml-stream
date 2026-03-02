@@ -6,6 +6,7 @@ Copyright 2026 Mateusz Golebiewski
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 import torch
 
 from ecg_ml_stream.ml.inference import _cache, get_model, infer_ecg_record
@@ -89,49 +90,30 @@ class TestGetModel:
 
 
 class TestInferEcgRecord:
-    def test_100hz_correct_window_size(self, fake_diagnosis):
+    @pytest.mark.parametrize(
+        ("sampling_rate", "n_samples", "expected_window_size", "expected_window_count"),
+        [
+            (100, 1000, 250, 7),   # 2.5s window, 1.25s stride at 100 Hz
+            (500, 5000, 1250, 7),  # 2.5s window, 1.25s stride at 500 Hz
+        ],
+    )
+    def test_window_tensor_shape(
+        self,
+        sampling_rate,
+        n_samples,
+        expected_window_size,
+        expected_window_count,
+        fake_diagnosis,
+    ):
         mock_classifier = MagicMock()
         mock_classifier.predict_windows.return_value = fake_diagnosis
 
         with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
-            infer_ecg_record(_make_signal(1000), sampling_rate=100)
+            infer_ecg_record(_make_signal(n_samples), sampling_rate=sampling_rate)
 
         tensor_arg = mock_classifier.predict_windows.call_args[0][0]
         assert isinstance(tensor_arg, torch.Tensor)
-        assert tensor_arg.shape[1] == 12
-        assert tensor_arg.shape[2] == 250
-
-    def test_100hz_correct_stride_produces_windows(self, fake_diagnosis):
-        mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = fake_diagnosis
-
-        with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
-            infer_ecg_record(_make_signal(1000), sampling_rate=100)
-
-        tensor_arg = mock_classifier.predict_windows.call_args[0][0]
-        # 1000 samples, window=250, stride=125 → 7 windows
-        assert tensor_arg.shape[0] == 7
-
-    def test_500hz_correct_window_size(self, fake_diagnosis):
-        mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = fake_diagnosis
-
-        with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
-            infer_ecg_record(_make_signal(5000), sampling_rate=500)
-
-        tensor_arg = mock_classifier.predict_windows.call_args[0][0]
-        assert tensor_arg.shape[2] == 1250
-
-    def test_500hz_correct_window_count(self, fake_diagnosis):
-        mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = fake_diagnosis
-
-        with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
-            infer_ecg_record(_make_signal(5000), sampling_rate=500)
-
-        tensor_arg = mock_classifier.predict_windows.call_args[0][0]
-        # 5000 samples, window=1250, stride=625 → 7 windows
-        assert tensor_arg.shape[0] == 7
+        assert tensor_arg.shape == (expected_window_count, 12, expected_window_size)
 
     def test_returns_classifier_result(self, fake_diagnosis):
         mock_classifier = MagicMock()

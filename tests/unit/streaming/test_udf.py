@@ -130,41 +130,27 @@ class TestInferenceUdfSuccess:
 
 
 class TestInferenceUdfError:
-    def test_error_diagnosis_class_is_none(self):
-        signal_s, rate_s = _make_series()
-        with patch(_INFER, side_effect=RuntimeError("model failed")):
-            result = _call_udf(signal_s, rate_s)
-        assert result.iloc[0]["diagnosis_class"] is None
-
-    def test_error_class_idx_is_none(self):
-        signal_s, rate_s = _make_series()
-        with patch(_INFER, side_effect=ValueError("bad input")):
-            result = _call_udf(signal_s, rate_s)
-        assert result.iloc[0]["diagnosis_class_idx"] is None
-
-    def test_error_probability_is_none(self):
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "diagnosis_class",
+            "diagnosis_class_idx",
+            "diagnosis_probability",
+            "is_dangerous",
+            "processing_time_ms",
+        ],
+    )
+    def test_error_field_is_none(self, field):
         signal_s, rate_s = _make_series()
         with patch(_INFER, side_effect=RuntimeError):
             result = _call_udf(signal_s, rate_s)
-        assert result.iloc[0]["diagnosis_probability"] is None
-
-    def test_error_is_dangerous_is_none(self):
-        signal_s, rate_s = _make_series()
-        with patch(_INFER, side_effect=RuntimeError):
-            result = _call_udf(signal_s, rate_s)
-        assert result.iloc[0]["is_dangerous"] is None
+        assert result.iloc[0][field] is None
 
     def test_error_description_contains_message(self):
         signal_s, rate_s = _make_series()
         with patch(_INFER, side_effect=RuntimeError("something went wrong")):
             result = _call_udf(signal_s, rate_s)
         assert "something went wrong" in result.iloc[0]["diagnosis_description"]
-
-    def test_error_processing_time_is_none(self):
-        signal_s, rate_s = _make_series()
-        with patch(_INFER, side_effect=RuntimeError):
-            result = _call_udf(signal_s, rate_s)
-        assert result.iloc[0]["processing_time_ms"] is None
 
     def test_error_does_not_stop_other_rows(self, fake_diagnosis):
         signal_s, rate_s = _make_series(n_rows=3)

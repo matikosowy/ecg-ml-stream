@@ -100,25 +100,18 @@ class TestCountParameters:
 
 
 class TestCreateSlidingWindows:
-    def test_returns_correct_number_of_windows(self):
-        signal = np.zeros((12, 1000))
-        result = create_sliding_windows(signal, window_size=250, stride=125)
-        assert result.shape[0] == 7
-
-    def test_window_shape(self):
-        signal = np.zeros((12, 1000))
-        result = create_sliding_windows(signal, window_size=250, stride=125)
-        assert result.shape == (7, 12, 250)
-
-    def test_exact_fit_one_window(self):
-        signal = np.zeros((12, 250))
-        result = create_sliding_windows(signal, window_size=250, stride=250)
-        assert result.shape[0] == 1
-
-    def test_signal_too_short_returns_empty(self):
-        signal = np.zeros((12, 100))
-        result = create_sliding_windows(signal, window_size=250, stride=125)
-        assert result.shape == (0, 12, 250)
+    @pytest.mark.parametrize(
+        ("signal_length", "window_size", "stride", "expected_shape"),
+        [
+            (1000, 250, 125, (7, 12, 250)),   # standard: 10s at 100 Hz
+            (250, 250, 250, (1, 12, 250)),    # exact fit: one window
+            (100, 250, 125, (0, 12, 250)),    # too short: empty output
+        ],
+    )
+    def test_output_shape(self, signal_length, window_size, stride, expected_shape):
+        signal = np.zeros((12, signal_length))
+        result = create_sliding_windows(signal, window_size=window_size, stride=stride)
+        assert result.shape == expected_shape
 
     def test_signal_too_short_preserves_dtype(self):
         signal = np.zeros((12, 100), dtype=np.float32)
