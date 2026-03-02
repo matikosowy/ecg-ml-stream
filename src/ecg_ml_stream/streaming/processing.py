@@ -96,10 +96,9 @@ def run_streaming_job(
             )
         )
 
-        for original_col, new_col in PARSED_STREAM_RENAME.items():
-            parsed_stream = parsed_stream.withColumnRenamed(original_col, new_col)
-
-        parsed_stream = parsed_stream.select(*PARSED_STREAM_RENAME.values())
+        parsed_stream = parsed_stream.select(
+            *[F.col(src).alias(dst) for src, dst in PARSED_STREAM_RENAME.items()]
+        )
 
         inference_udf = create_inference_udf(model_path)
         diagnosed_stream = parsed_stream.withColumn(
@@ -110,11 +109,9 @@ def run_streaming_job(
             F.current_timestamp(),
         )
 
-        for original_col, new_col in DIAGNOSED_STREAM_RENAME.items():
-            diagnosed_stream = diagnosed_stream.withColumnRenamed(original_col, new_col)
-
         diagnosed_stream = diagnosed_stream.select(
-            *DIAGNOSED_STREAM_SELECT, *DIAGNOSED_STREAM_RENAME.values()
+            *[F.col(c) for c in DIAGNOSED_STREAM_SELECT],
+            *[F.col(src).alias(dst) for src, dst in DIAGNOSED_STREAM_RENAME.items()],
         )
 
         output_stream = (

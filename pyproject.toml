@@ -70,6 +70,8 @@ parametrize-names-type = "tuple"
     "SLF001",   # Allow invoking private methods in tests
     "RUF069",   # Allow float comparisons
     "PLC2701",  # Allow importing private names from internal modules in tests
+    "N812",     # Allow `functions as F` — standard PySpark convention
+    "FBT003",   # Allow boolean positional values in function calls (e.g. F.lit(False))
 ]
 
 "src/ecg_ml_stream/utils/*.py" = [
@@ -106,3 +108,10 @@ line-ending = "lf"
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+markers = [
+    "integration: tests that require a real local SparkSession (slow, needs Java)",
+    "kafka: tests that require a running Kafka broker (docker compose up)",
+]
