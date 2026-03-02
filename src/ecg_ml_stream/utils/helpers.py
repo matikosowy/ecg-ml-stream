@@ -144,3 +144,38 @@ def save_checkpoint(
     if is_best:
         best_path = save_path.parent / "best_model.pt"
         torch.save(checkpoint, best_path)
+
+
+def create_sliding_windows(
+    signal: np.ndarray,
+    window_size: int,
+    stride: int,
+    normalize: bool = False,
+) -> np.ndarray:
+    """Extract overlapping windows from an ECG signal.
+
+    Args:
+        signal (np.ndarray): Input signal of shape (channels, samples).
+        window_size (int): Number of samples in each window.
+        stride (int): Number of samples to move between windows.
+        normalize (bool): Whether to apply per-channel normalization.
+
+    Returns:
+        np.ndarray: Array of shape (num_windows, channels, window_size).
+
+    """
+    num_channels, signal_length = signal.shape
+    windows = []
+
+    start = 0
+    while start + window_size <= signal_length:
+        window = signal[:, start : start + window_size]
+        if normalize:
+            window = normalize_signal(window)
+        windows.append(window)
+        start += stride
+
+    if not windows:
+        return np.empty((0, num_channels, window_size), dtype=signal.dtype)
+
+    return np.stack(windows, axis=0)

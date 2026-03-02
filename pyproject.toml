@@ -69,6 +69,14 @@ parametrize-names-type = "tuple"
     "RUF069",   # Allow float comparisons
 ]
 
+"src/ecg_ml_stream/utils/*.py" = [
+    "FBT003", # Allow boolean positional arguments in utility functions
+]
+
+"src/ecg_ml_stream/streaming/udf.py" = [
+    "DTZ005", # Timezone argument is not needed for this project
+]
+
 "src/ecg_ml_stream/dataset/ecg_dataset.py" = [
     "PLR2004", # Allow 'magic values' for PTB-XL stratified splits and sampling rates
 ]

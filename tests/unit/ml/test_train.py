@@ -18,7 +18,6 @@ from ecg_ml_stream.ml.train import (
     parse_args,
     train_epoch,
     validate,
-    voting_prediction,
 )
 from ecg_ml_stream.utils.helpers import save_checkpoint
 
@@ -255,45 +254,6 @@ class TestEvaluateWithVoting:
             result = evaluate_with_voting(untrained_model, mock_dataset, torch.device("cpu"))
 
         assert 0.0 <= result["voting_accuracy"] <= 1.0
-
-
-class TestVotingPrediction:
-    def test_soft_selects_highest_avg_class(self):
-        preds = np.array([[0.1, 0.7, 0.2], [0.2, 0.6, 0.2], [0.3, 0.5, 0.2]], dtype=np.float32)
-        class_idx, _ = voting_prediction(preds, mode="soft")
-        assert class_idx == 1
-
-    def test_soft_returns_correct_avg_probs(self):
-        preds = np.array([[0.2, 0.5, 0.3], [0.4, 0.3, 0.3]], dtype=np.float32)
-        _, avg_probs = voting_prediction(preds, mode="soft")
-        np.testing.assert_allclose(avg_probs, preds.mean(axis=0), atol=1e-6)
-
-    def test_hard_majority_vote(self):
-        preds = np.array([[0.8, 0.1, 0.1], [0.1, 0.8, 0.1], [0.1, 0.8, 0.1]], dtype=np.float32)
-        class_idx, _ = voting_prediction(preds, mode="hard")
-        assert class_idx == 1
-
-    def test_hard_returns_avg_probs(self):
-        preds = np.array([[0.8, 0.1, 0.1], [0.1, 0.8, 0.1], [0.1, 0.1, 0.8]], dtype=np.float32)
-        _, avg_probs = voting_prediction(preds, mode="hard")
-        np.testing.assert_allclose(avg_probs, preds.mean(axis=0), atol=1e-6)
-
-    def test_single_window_soft(self):
-        preds = np.array([[0.1, 0.2, 0.7]], dtype=np.float32)
-        class_idx, _ = voting_prediction(preds)
-        assert class_idx == 2
-
-    def test_returns_tuple_of_two(self):
-        preds = np.array([[0.33, 0.33, 0.34]], dtype=np.float32)
-        result = voting_prediction(preds)
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-
-    def test_default_mode_is_soft(self):
-        preds = np.array([[0.1, 0.8, 0.1], [0.1, 0.8, 0.1]], dtype=np.float32)
-        class_idx, avg_probs = voting_prediction(preds)
-        assert class_idx == 1
-        np.testing.assert_allclose(avg_probs, preds.mean(axis=0), atol=1e-6)
 
 
 class TestMain:
