@@ -67,7 +67,7 @@ STREAM_INPUT_SCHEMA = StructType(
 )
 
 
-STREAM_OUTPUT_SCHEMA = StructType(
+INFERENCE_OUTPUT_SCHEMA = StructType(
     [
         StructField("diagnosis_class", StringType(), True),
         StructField("diagnosis_class_idx", IntegerType(), True),

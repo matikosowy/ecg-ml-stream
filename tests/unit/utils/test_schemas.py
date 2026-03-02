@@ -12,7 +12,7 @@ from pyspark.sql.types import (
     StructType,
 )
 
-from ecg_ml_stream.utils.schemas import STREAM_INPUT_SCHEMA, STREAM_OUTPUT_SCHEMA
+from ecg_ml_stream.utils.schemas import INFERENCE_OUTPUT_SCHEMA, STREAM_INPUT_SCHEMA
 
 
 def _field(schema: StructType, name: str):
@@ -25,7 +25,15 @@ class TestStreamInputSchema:
 
     def test_top_level_field_names(self):
         names = {f.name for f in STREAM_INPUT_SCHEMA.fields}
-        assert names == {"exam_id", "timestamp_sent", "hospital", "thread_id", "patient", "signal", "metadata"}
+        assert names == {
+            "exam_id",
+            "timestamp_sent",
+            "hospital",
+            "thread_id",
+            "patient",
+            "signal",
+            "metadata",
+        }
 
     def test_exam_id_not_nullable(self):
         assert _field(STREAM_INPUT_SCHEMA, "exam_id").nullable is False
@@ -100,10 +108,10 @@ class TestStreamInputSchema:
 
 class TestStreamOutputSchema:
     def test_is_struct_type(self):
-        assert isinstance(STREAM_OUTPUT_SCHEMA, StructType)
+        assert isinstance(INFERENCE_OUTPUT_SCHEMA, StructType)
 
     def test_field_names(self):
-        names = {f.name for f in STREAM_OUTPUT_SCHEMA.fields}
+        names = {f.name for f in INFERENCE_OUTPUT_SCHEMA.fields}
         assert names == {
             "diagnosis_class",
             "diagnosis_class_idx",
@@ -115,34 +123,46 @@ class TestStreamOutputSchema:
         }
 
     def test_has_seven_fields(self):
-        assert len(STREAM_OUTPUT_SCHEMA.fields) == 7
+        assert len(INFERENCE_OUTPUT_SCHEMA.fields) == 7
 
     def test_diagnosis_class_is_string(self):
-        assert isinstance(_field(STREAM_OUTPUT_SCHEMA, "diagnosis_class").dataType, StringType)
+        assert isinstance(
+            _field(
+                INFERENCE_OUTPUT_SCHEMA,
+                "diagnosis_class"
+            ).dataType,
+            StringType
+        )
 
     def test_diagnosis_class_idx_is_integer(self):
         assert isinstance(
-            _field(STREAM_OUTPUT_SCHEMA, "diagnosis_class_idx").dataType, IntegerType
+            _field(
+                INFERENCE_OUTPUT_SCHEMA,
+                "diagnosis_class_idx"
+            ).dataType,
+            IntegerType
         )
 
     def test_diagnosis_probability_is_double(self):
         assert isinstance(
-            _field(STREAM_OUTPUT_SCHEMA, "diagnosis_probability").dataType, DoubleType
+            _field(INFERENCE_OUTPUT_SCHEMA, "diagnosis_probability").dataType, DoubleType
         )
 
     def test_all_probabilities_is_string(self):
-        assert isinstance(
-            _field(STREAM_OUTPUT_SCHEMA, "all_probabilities").dataType, StringType
-        )
+        assert isinstance(_field(INFERENCE_OUTPUT_SCHEMA, "all_probabilities").dataType, StringType)
 
     def test_is_dangerous_is_boolean(self):
-        assert isinstance(_field(STREAM_OUTPUT_SCHEMA, "is_dangerous").dataType, BooleanType)
+        assert isinstance(_field(INFERENCE_OUTPUT_SCHEMA, "is_dangerous").dataType, BooleanType)
 
     def test_processing_time_ms_is_double(self):
         assert isinstance(
-            _field(STREAM_OUTPUT_SCHEMA, "processing_time_ms").dataType, DoubleType
+            _field(
+                INFERENCE_OUTPUT_SCHEMA,
+                "processing_time_ms"
+            ).dataType,
+            DoubleType
         )
 
     def test_all_fields_nullable(self):
-        for f in STREAM_OUTPUT_SCHEMA.fields:
+        for f in INFERENCE_OUTPUT_SCHEMA.fields:
             assert f.nullable is True

@@ -6,7 +6,6 @@ Copyright 2026 Mateusz Golebiewski
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 import torch
 
 from ecg_ml_stream.ml.inference import _cache, get_model, infer_ecg_record
@@ -15,28 +14,8 @@ _INFERENCE = "ecg_ml_stream.ml.inference"
 _ECG_CLASSIFIER = f"{_INFERENCE}.ECGClassifier"
 
 
-def _fake_diagnosis() -> dict:
-    return {
-        "class": "NORM",
-        "class_idx": 0,
-        "probability": 0.9,
-        "all_probabilities": {"NORM": 0.9, "MI": 0.025, "STTC": 0.025, "CD": 0.025, "HYP": 0.025},
-        "is_dangerous": False,
-        "description": "Normal sinus rhythm",
-    }
-
-
 def _make_signal(n_samples: int = 1000) -> list[list[float]]:
     return np.random.default_rng(0).standard_normal((12, n_samples)).tolist()
-
-
-@pytest.fixture(autouse=True)
-def _reset_cache() -> None:
-    _cache.instance = None
-    _cache.path = None
-    yield
-    _cache.instance = None
-    _cache.path = None
 
 
 class TestGetModel:
@@ -110,9 +89,9 @@ class TestGetModel:
 
 
 class TestInferEcgRecord:
-    def test_100hz_correct_window_size(self):
+    def test_100hz_correct_window_size(self, fake_diagnosis):
         mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = _fake_diagnosis()
+        mock_classifier.predict_windows.return_value = fake_diagnosis
 
         with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
             infer_ecg_record(_make_signal(1000), sampling_rate=100)
@@ -122,9 +101,9 @@ class TestInferEcgRecord:
         assert tensor_arg.shape[1] == 12
         assert tensor_arg.shape[2] == 250
 
-    def test_100hz_correct_stride_produces_windows(self):
+    def test_100hz_correct_stride_produces_windows(self, fake_diagnosis):
         mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = _fake_diagnosis()
+        mock_classifier.predict_windows.return_value = fake_diagnosis
 
         with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
             infer_ecg_record(_make_signal(1000), sampling_rate=100)
@@ -133,9 +112,9 @@ class TestInferEcgRecord:
         # 1000 samples, window=250, stride=125 → 7 windows
         assert tensor_arg.shape[0] == 7
 
-    def test_500hz_correct_window_size(self):
+    def test_500hz_correct_window_size(self, fake_diagnosis):
         mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = _fake_diagnosis()
+        mock_classifier.predict_windows.return_value = fake_diagnosis
 
         with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
             infer_ecg_record(_make_signal(5000), sampling_rate=500)
@@ -143,9 +122,9 @@ class TestInferEcgRecord:
         tensor_arg = mock_classifier.predict_windows.call_args[0][0]
         assert tensor_arg.shape[2] == 1250
 
-    def test_500hz_correct_window_count(self):
+    def test_500hz_correct_window_count(self, fake_diagnosis):
         mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = _fake_diagnosis()
+        mock_classifier.predict_windows.return_value = fake_diagnosis
 
         with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
             infer_ecg_record(_make_signal(5000), sampling_rate=500)
@@ -154,19 +133,18 @@ class TestInferEcgRecord:
         # 5000 samples, window=1250, stride=625 → 7 windows
         assert tensor_arg.shape[0] == 7
 
-    def test_returns_classifier_result(self):
-        expected = _fake_diagnosis()
+    def test_returns_classifier_result(self, fake_diagnosis):
         mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = expected
+        mock_classifier.predict_windows.return_value = fake_diagnosis
 
         with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
             result = infer_ecg_record(_make_signal(1000), sampling_rate=100)
 
-        assert result is expected
+        assert result is fake_diagnosis
 
-    def test_tensor_dtype_is_float32(self):
+    def test_tensor_dtype_is_float32(self, fake_diagnosis):
         mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = _fake_diagnosis()
+        mock_classifier.predict_windows.return_value = fake_diagnosis
 
         with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier):
             infer_ecg_record(_make_signal(1000), sampling_rate=100)
@@ -174,9 +152,9 @@ class TestInferEcgRecord:
         tensor_arg = mock_classifier.predict_windows.call_args[0][0]
         assert tensor_arg.dtype == torch.float32
 
-    def test_custom_model_path_forwarded(self, tmp_path):
+    def test_custom_model_path_forwarded(self, fake_diagnosis, tmp_path):
         mock_classifier = MagicMock()
-        mock_classifier.predict_windows.return_value = _fake_diagnosis()
+        mock_classifier.predict_windows.return_value = fake_diagnosis
         custom_path = "/custom/model.pt"
 
         with patch(f"{_INFERENCE}.get_model", return_value=mock_classifier) as mock_get:

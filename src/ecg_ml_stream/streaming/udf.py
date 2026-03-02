@@ -11,7 +11,7 @@ from pyspark.sql.functions import pandas_udf
 from pyspark.sql.udf import UserDefinedFunction
 
 from ecg_ml_stream.ml.inference import infer_ecg_record
-from ecg_ml_stream.utils.schemas import STREAM_OUTPUT_SCHEMA
+from ecg_ml_stream.utils.schemas import INFERENCE_OUTPUT_SCHEMA
 
 
 def create_inference_udf(
@@ -27,22 +27,23 @@ def create_inference_udf(
 
     """
 
-    @pandas_udf(STREAM_OUTPUT_SCHEMA)
+    @pandas_udf(INFERENCE_OUTPUT_SCHEMA)
     def _udf(
         signal_data_series: pd.Series,
         sampling_rate_series: pd.Series,
     ) -> pd.DataFrame:
         results = []
 
-        for signal_data, sampling_rate in zip(signal_data_series, sampling_rate_series):
+        for signal_data, sampling_rate in zip(
+            signal_data_series, sampling_rate_series, strict=True
+        ):
             try:
-                if isinstance(signal_data, str):
-                    signal_data = json.loads(signal_data)
+                parsed = json.loads(signal_data) if isinstance(signal_data, str) else signal_data
 
                 processing_start = datetime.now()
 
                 diagnosis = infer_ecg_record(
-                    signal_data=signal_data,
+                    signal_data=parsed,
                     sampling_rate=int(sampling_rate),
                     model_path=model_path,
                 )

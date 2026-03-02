@@ -69,6 +69,7 @@ parametrize-names-type = "tuple"
     "ARG",      # Allow fixtures (unused arguments) and many arguments in test functions
     "SLF001",   # Allow invoking private methods in tests
     "RUF069",   # Allow float comparisons
+    "PLC2701",  # Allow importing private names from internal modules in tests
 ]
 
 "src/ecg_ml_stream/utils/*.py" = [
