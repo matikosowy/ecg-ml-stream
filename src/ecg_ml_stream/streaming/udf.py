@@ -52,7 +52,6 @@ def inference_udf_function(
 
                 results.append(
                     {
-                        "exam_id": row["exam_id"],
                         "diagnosis_class": diagnosis["class"],
                         "diagnosis_class_idx": diagnosis["class_idx"],
                         "diagnosis_probability": diagnosis["probability"],
@@ -60,26 +59,19 @@ def inference_udf_function(
                         "is_dangerous": diagnosis["is_dangerous"],
                         "diagnosis_description": diagnosis["description"],
                         "processing_time_ms": processing_time_ms,
-                        "processing_timestamp": processing_end.isoformat(),
-                        "success": True,
-                        "error_message": None,
                     }
                 )
 
             except Exception as e:  # noqa: BLE001 - Allow broad exception handling to capture various inference errors
                 results.append(
                     {
-                        "exam_id": row.get("exam_id", "unknown"),
                         "diagnosis_class": None,
                         "diagnosis_class_idx": None,
                         "diagnosis_probability": None,
                         "all_probabilities": None,
                         "is_dangerous": None,
-                        "diagnosis_description": None,
+                        "diagnosis_description": str(e),
                         "processing_time_ms": None,
-                        "processing_timestamp": datetime.now().isoformat(),
-                        "success": False,
-                        "error_message": str(e),
                     }
                 )
 

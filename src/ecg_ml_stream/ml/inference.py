@@ -73,7 +73,7 @@ def infer_ecg_record(
 
     if sampling_rate == 100:
         window_size = 250  # 2.5s @ 100Hz
-        stride = 1.25  # 1.25s
+        stride = 125  # 1.25s @ 100Hz
     else:
         window_size = 1250
         stride = 625
