@@ -4,46 +4,46 @@ Copyright 2026 Mateusz Golebiewski
 """
 
 import json
-from collections.abc import Iterator
 from datetime import datetime
 
 import pandas as pd
 from pyspark.sql.functions import pandas_udf
+from pyspark.sql.udf import UserDefinedFunction
 
 from ecg_ml_stream.ml.inference import infer_ecg_record
 from ecg_ml_stream.utils.schemas import STREAM_OUTPUT_SCHEMA
 
 
-@pandas_udf(STREAM_OUTPUT_SCHEMA)
-def inference_udf_function(
-    iterator: Iterator[pd.DataFrame],
+def create_inference_udf(
     model_path: str = "/app/models/ecg_resnet1d.pt",
-) -> Iterator[pd.DataFrame]:
-    """Run inference for every row in an Arrow batch.
+) -> UserDefinedFunction:
+    """Return a pandas UDF that runs ECG inference with the given model path.
 
     Args:
-        iterator (Iterator[pd.DataFrame]): Iterator over input DataFrames.
         model_path (str): Path to the ECG classification model.
 
-    Yields:
-        Iterator[pd.DataFrame]: Iterator over DataFrames containing diagnosis results.
+    Returns:
+        UserDefinedFunctionLike: Registered pandas UDF ready for use in Spark.
 
     """
-    for batch_df in iterator:
+
+    @pandas_udf(STREAM_OUTPUT_SCHEMA)
+    def _udf(
+        signal_data_series: pd.Series,
+        sampling_rate_series: pd.Series,
+    ) -> pd.DataFrame:
         results = []
 
-        for _, row in batch_df.iterrows():
+        for signal_data, sampling_rate in zip(signal_data_series, sampling_rate_series):
             try:
-                signal_data = row["signal_data"]
                 if isinstance(signal_data, str):
                     signal_data = json.loads(signal_data)
 
-                sampling_rate = row["sampling_rate"]
                 processing_start = datetime.now()
 
                 diagnosis = infer_ecg_record(
                     signal_data=signal_data,
-                    sampling_rate=sampling_rate,
+                    sampling_rate=int(sampling_rate),
                     model_path=model_path,
                 )
 
@@ -62,7 +62,7 @@ def inference_udf_function(
                     }
                 )
 
-            except Exception as e:  # noqa: BLE001 - Allow broad exception handling to capture various inference errors
+            except Exception as e:  # noqa: BLE001 - Capture various inference errors per row
                 results.append(
                     {
                         "diagnosis_class": None,
@@ -75,4 +75,6 @@ def inference_udf_function(
                     }
                 )
 
-        yield pd.DataFrame(results)
+        return pd.DataFrame(results)
+
+    return _udf
