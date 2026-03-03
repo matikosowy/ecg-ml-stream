@@ -6,7 +6,7 @@ Copyright 2026 Mateusz Golebiewski
 import argparse
 
 import pyspark.sql.functions as F  # noqa: N812 - common Spark convention
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import (
     StringType,
 )
@@ -62,10 +62,11 @@ def run_streaming_job(
         .config("spark.driver.memory", "2g")
         .config("spark.driver.cores", "2")
         .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+        .config("spark.ui.showConsoleProgress", "false")
     )
 
     with spark_builder.getOrCreate() as spark:
-        spark.sparkContext.setLogLevel("WARN")
+        spark.sparkContext.setLogLevel("ERROR")
         logger.info("Spark version:  %s", spark.version)
         logger.info("Spark master:   %s", spark.sparkContext.master)
 
@@ -114,16 +115,43 @@ def run_streaming_job(
             *[F.col(src).alias(dst) for src, dst in DIAGNOSED_STREAM_RENAME.items()],
         )
 
-        output_stream = (
-            diagnosed_stream.withColumn("value", F.to_json(F.struct("*")))
-            .withColumnRenamed("exam_id", "key")
-            .select("key", "value")
-        )
+        def _write_batch(batch_df: DataFrame, batch_id: int) -> None:
+            """Log per-record diagnosis info and write the batch to Kafka."""
+            rows = batch_df.select(
+                "exam_id",
+                "diagnosis_class",
+                "diagnosis_probability",
+                "is_dangerous",
+                "processing_time_ms",
+            ).collect()
+
+            if not rows:
+                return
+
+            logger.info("Batch %d — %d record(s)", batch_id, len(rows))
+            for row in rows:
+                danger_tag = "  [DANGEROUS]" if row.is_dangerous else ""
+                logger.info(
+                    "  [%s]  %-6s  p=%.3f  %.0fms%s",
+                    row.exam_id,
+                    row.diagnosis_class or "ERROR",
+                    row.diagnosis_probability or 0.0,
+                    row.processing_time_ms or 0.0,
+                    danger_tag,
+                )
+
+            (
+                batch_df.withColumn("value", F.to_json(F.struct("*")))
+                .withColumnRenamed("exam_id", "key")
+                .select("key", "value")
+                .write.format("kafka")
+                .option("kafka.bootstrap.servers", kafka_bootstrap_servers)
+                .option("topic", output_topic)
+                .save()
+            )
 
         query = (
-            output_stream.writeStream.format("kafka")
-            .option("kafka.bootstrap.servers", kafka_bootstrap_servers)
-            .option("topic", output_topic)
+            diagnosed_stream.writeStream.foreachBatch(_write_batch)
             .option("checkpointLocation", checkpoint_path)
             .outputMode("append")
             .trigger(processingTime="1 seconds")

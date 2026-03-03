@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /build
 
@@ -14,7 +14,7 @@ RUN mkdir -p "src/ecg_ml_stream" \
 
 
 # Final image
-FROM python:3.11-slim AS final
+FROM python:3.11-slim-bookworm AS final
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         default-jdk-headless \
