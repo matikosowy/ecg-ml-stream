@@ -24,6 +24,7 @@ def mock_df(mock_query: MagicMock) -> MagicMock:
     """
     write_chain = MagicMock()
     write_chain.format.return_value = write_chain
+    write_chain.foreachBatch.return_value = write_chain
     write_chain.option.return_value = write_chain
     write_chain.outputMode.return_value = write_chain
     write_chain.trigger.return_value = write_chain
