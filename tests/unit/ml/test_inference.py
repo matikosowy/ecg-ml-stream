@@ -93,7 +93,7 @@ class TestInferEcgRecord:
     @pytest.mark.parametrize(
         ("sampling_rate", "n_samples", "expected_window_size", "expected_window_count"),
         [
-            (100, 1000, 250, 7),   # 2.5s window, 1.25s stride at 100 Hz
+            (100, 1000, 250, 7),  # 2.5s window, 1.25s stride at 100 Hz
             (500, 5000, 1250, 7),  # 2.5s window, 1.25s stride at 500 Hz
         ],
     )

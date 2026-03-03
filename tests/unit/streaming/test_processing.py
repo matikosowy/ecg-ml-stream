@@ -4,7 +4,7 @@ Copyright 2026 Mateusz Golebiewski
 """
 
 import sys
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -152,6 +152,69 @@ class TestRunStreamingJob:
             run_streaming_job(input_topic="my-ecg-topic")
         option_values = [c[0][1] for c in mock_spark.readStream.option.call_args_list]
         assert "my-ecg-topic" in option_values
+
+
+class TestWriteBatch:
+    """Tests for the _write_batch closure passed to foreachBatch."""
+
+    def _get_write_batch_fn(self, streaming_env):
+        mock_spark, _ = streaming_env
+        mock_df = mock_spark.readStream.load.return_value
+        return mock_df.writeStream.foreachBatch.call_args[0][0]
+
+    def _make_batch_df(self, rows):
+        select_result = MagicMock()
+        select_result.collect.return_value = rows
+
+        write_chain = MagicMock()
+        write_chain.withColumnRenamed.return_value = write_chain
+        write_chain.select.return_value = write_chain
+
+        batch_df = MagicMock()
+        batch_df.select.return_value = select_result
+        batch_df.withColumn.return_value = write_chain
+        return batch_df
+
+    def test_empty_batch_skips_write(self, streaming_env):
+        with patch(f"{_PROCESSING}.create_inference_udf"):
+            run_streaming_job()
+        write_batch = self._get_write_batch_fn(streaming_env)
+
+        batch_df = self._make_batch_df([])
+        write_batch(batch_df, 0)
+
+        batch_df.withColumn.assert_not_called()
+
+    def test_rows_written_to_kafka(self, streaming_env):
+        with patch(f"{_PROCESSING}.create_inference_udf"):
+            run_streaming_job()
+        write_batch = self._get_write_batch_fn(streaming_env)
+
+        row = MagicMock()
+        row.is_dangerous = False
+        row.exam_id = "abc-123"
+        row.diagnosis_class = "NORM"
+        row.diagnosis_probability = 0.9
+        row.processing_time_ms = 100.0
+
+        batch_df = self._make_batch_df([row])
+        write_batch(batch_df, 1)
+
+        write_chain = batch_df.withColumn.return_value
+        write_chain.write.format.assert_called_with("kafka")
+
+    def test_dangerous_row_sets_danger_tag(self, streaming_env):
+        with patch(f"{_PROCESSING}.create_inference_udf"):
+            run_streaming_job()
+        write_batch = self._get_write_batch_fn(streaming_env)
+
+        row = MagicMock()
+        row.is_dangerous = True
+
+        batch_df = self._make_batch_df([row])
+        write_batch(batch_df, 2)
+
+        batch_df.withColumn.assert_called_once()
 
 
 class TestStreamingDryRun:

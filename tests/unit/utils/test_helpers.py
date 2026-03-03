@@ -103,9 +103,9 @@ class TestCreateSlidingWindows:
     @pytest.mark.parametrize(
         ("signal_length", "window_size", "stride", "expected_shape"),
         [
-            (1000, 250, 125, (7, 12, 250)),   # standard: 10s at 100 Hz
-            (250, 250, 250, (1, 12, 250)),    # exact fit: one window
-            (100, 250, 125, (0, 12, 250)),    # too short: empty output
+            (1000, 250, 125, (7, 12, 250)),  # standard: 10s at 100 Hz
+            (250, 250, 250, (1, 12, 250)),  # exact fit: one window
+            (100, 250, 125, (0, 12, 250)),  # too short: empty output
         ],
     )
     def test_output_shape(self, signal_length, window_size, stride, expected_shape):

@@ -26,14 +26,18 @@ class TestStreamInputSchema:
     """Tests that STREAM_INPUT_SCHEMA correctly parses ECG Kafka payloads."""
 
     def test_from_json_parses_exam_id(self, raw_kafka_df):
-        result = raw_kafka_df.select(
-            F.from_json(
-                F.col("value").cast(StringType()),
-                schema=__import__(
-                    "ecg_ml_stream.utils.schemas", fromlist=["STREAM_INPUT_SCHEMA"]
-                ).STREAM_INPUT_SCHEMA,
-            ).alias("data")
-        ).select("data.exam_id").first()[0]
+        result = (
+            raw_kafka_df.select(
+                F.from_json(
+                    F.col("value").cast(StringType()),
+                    schema=__import__(
+                        "ecg_ml_stream.utils.schemas", fromlist=["STREAM_INPUT_SCHEMA"]
+                    ).STREAM_INPUT_SCHEMA,
+                ).alias("data")
+            )
+            .select("data.exam_id")
+            .first()[0]
+        )
         assert result == "test-exam-uuid-1234"
 
     def test_from_json_parses_sampling_rate(self, raw_kafka_df):
@@ -151,9 +155,11 @@ class TestCreateInferenceUdfIntegration:
         assert udf.returnType == INFERENCE_OUTPUT_SCHEMA
 
     def test_udf_output_columns_on_dataframe(self, spark: SparkSession, fake_diagnosis):
-        input_schema = StructType()\
-            .add("signal_data", ArrayType(ArrayType(DoubleType())))\
+        input_schema = (
+            StructType()
+            .add("signal_data", ArrayType(ArrayType(DoubleType())))
             .add("sampling_rate", IntegerType())
+        )
 
         rows = [{"signal_data": [[0.1] * 10] * 12, "sampling_rate": 100}]
         df = spark.createDataFrame(rows, schema=input_schema)

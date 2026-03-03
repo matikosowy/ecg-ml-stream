@@ -126,21 +126,11 @@ class TestStreamOutputSchema:
         assert len(INFERENCE_OUTPUT_SCHEMA.fields) == 7
 
     def test_diagnosis_class_is_string(self):
-        assert isinstance(
-            _field(
-                INFERENCE_OUTPUT_SCHEMA,
-                "diagnosis_class"
-            ).dataType,
-            StringType
-        )
+        assert isinstance(_field(INFERENCE_OUTPUT_SCHEMA, "diagnosis_class").dataType, StringType)
 
     def test_diagnosis_class_idx_is_integer(self):
         assert isinstance(
-            _field(
-                INFERENCE_OUTPUT_SCHEMA,
-                "diagnosis_class_idx"
-            ).dataType,
-            IntegerType
+            _field(INFERENCE_OUTPUT_SCHEMA, "diagnosis_class_idx").dataType, IntegerType
         )
 
     def test_diagnosis_probability_is_double(self):
@@ -156,11 +146,7 @@ class TestStreamOutputSchema:
 
     def test_processing_time_ms_is_double(self):
         assert isinstance(
-            _field(
-                INFERENCE_OUTPUT_SCHEMA,
-                "processing_time_ms"
-            ).dataType,
-            DoubleType
+            _field(INFERENCE_OUTPUT_SCHEMA, "processing_time_ms").dataType, DoubleType
         )
 
     def test_all_fields_nullable(self):
