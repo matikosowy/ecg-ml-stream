@@ -12,6 +12,7 @@ import torch
 from ecg_ml_stream.ml.model import ResNet1D
 from ecg_ml_stream.utils.helpers import (
     count_parameters,
+    create_sliding_windows,
     get_device,
     normalize_signal,
     save_checkpoint,
@@ -96,6 +97,38 @@ class TestCountParameters:
         for p in model.parameters():
             p.requires_grad = False
         assert count_parameters(model) == 0
+
+
+class TestCreateSlidingWindows:
+    @pytest.mark.parametrize(
+        ("signal_length", "window_size", "stride", "expected_shape"),
+        [
+            (1000, 250, 125, (7, 12, 250)),  # standard: 10s at 100 Hz
+            (250, 250, 250, (1, 12, 250)),  # exact fit: one window
+            (100, 250, 125, (0, 12, 250)),  # too short: empty output
+        ],
+    )
+    def test_output_shape(self, signal_length, window_size, stride, expected_shape):
+        signal = np.zeros((12, signal_length))
+        result = create_sliding_windows(signal, window_size=window_size, stride=stride)
+        assert result.shape == expected_shape
+
+    def test_signal_too_short_preserves_dtype(self):
+        signal = np.zeros((12, 100), dtype=np.float32)
+        result = create_sliding_windows(signal, window_size=250, stride=125)
+        assert result.dtype == np.float32
+
+    def test_normalize_true_applies_normalization(self):
+        rng = np.random.default_rng(0)
+        signal = rng.standard_normal((12, 500))
+        result = create_sliding_windows(signal, window_size=250, stride=250, normalize=True)
+        means = result[0].mean(axis=-1)
+        np.testing.assert_allclose(means, 0.0, atol=1e-5)
+
+    def test_normalize_false_preserves_values(self):
+        signal = np.ones((12, 500)) * 5.0
+        result = create_sliding_windows(signal, window_size=250, stride=250, normalize=False)
+        assert np.all(result == 5.0)
 
 
 class TestSaveCheckpoint:

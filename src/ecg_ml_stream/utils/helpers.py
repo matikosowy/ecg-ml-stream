@@ -59,13 +59,20 @@ def setup_logging(log_dir: str = "logs", name: str = "training") -> logging.Logg
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 - No timezone needed
     log_file = log_path / f"{name}_{timestamp}.log"
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
-    )
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
 
-    return logging.getLogger(name)
+    if not logger.handlers:
+        fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(fmt)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(fmt)
+        logger.addHandler(file_handler)
+        logger.addHandler(stream_handler)
+        logger.propagate = False
+
+    return logger
 
 
 def get_device() -> torch.device:
@@ -75,7 +82,7 @@ def get_device() -> torch.device:
         torch.device: CUDA if available, then MPS (Apple Silicon), then CPU.
 
     """
-    logger = setup_logging(name="device-setup")
+    logger = logging.getLogger(__name__)
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -137,3 +144,38 @@ def save_checkpoint(
     if is_best:
         best_path = save_path.parent / "best_model.pt"
         torch.save(checkpoint, best_path)
+
+
+def create_sliding_windows(
+    signal: np.ndarray,
+    window_size: int,
+    stride: int,
+    normalize: bool = False,
+) -> np.ndarray:
+    """Extract overlapping windows from an ECG signal.
+
+    Args:
+        signal (np.ndarray): Input signal of shape (channels, samples).
+        window_size (int): Number of samples in each window.
+        stride (int): Number of samples to move between windows.
+        normalize (bool): Whether to apply per-channel normalization.
+
+    Returns:
+        np.ndarray: Array of shape (num_windows, channels, window_size).
+
+    """
+    num_channels, signal_length = signal.shape
+    windows = []
+
+    start = 0
+    while start + window_size <= signal_length:
+        window = signal[:, start : start + window_size]
+        if normalize:
+            window = normalize_signal(window)
+        windows.append(window)
+        start += stride
+
+    if not windows:
+        return np.empty((0, num_channels, window_size), dtype=signal.dtype)
+
+    return np.stack(windows, axis=0)

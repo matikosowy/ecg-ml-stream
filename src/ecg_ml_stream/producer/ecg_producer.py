@@ -5,6 +5,7 @@ Copyright 2026 Mateusz Golebiewski
 
 import argparse
 import json
+import logging
 import random
 import threading
 import time
@@ -21,7 +22,7 @@ from ecg_ml_stream.dataset.ecg_dataset import ECGDataset
 from ecg_ml_stream.utils.constants import ECG_LEAD_NAMES
 from ecg_ml_stream.utils.helpers import setup_logging
 
-logger = setup_logging(name="producer")
+logger = logging.getLogger("producer")
 
 
 class ECGProducer:
@@ -230,6 +231,7 @@ class ECGProducer:
 
 def main() -> None:
     """Entry point for the ECG Kafka Producer."""
+    setup_logging("logs", "producer")
     parser = argparse.ArgumentParser(description="ECG Kafka Producer")
 
     parser.add_argument(

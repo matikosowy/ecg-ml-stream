@@ -27,6 +27,26 @@ pip install .
 
 ---
 
+### Start the Spark Streaming stack
+```
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+This starts: Kafka, Spark master + 2 workers, ECG consumer, Kafka UI.
+
+| Service | URL |
+| --- | --- |
+| Kafka UI | http://localhost:8090 |
+| Spark master | http://localhost:8080 |
+| Spark driver | http://localhost:4040 |
+
+### Stop the stack
+```
+docker compose -f docker/docker-compose.yml down
+```
+
+---
+
 ### Run producer
 ```
 python -m ecg_ml_stream.producer.ecg_producer \

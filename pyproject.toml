@@ -14,6 +14,8 @@ dependencies = [
     "kafka-python==2.3.0",
     "pandas==2.2.3",
     "numpy==2.4.2",
+    "pyarrow==19.0.1",
+    "pyspark==3.5.3",
     "wfdb==4.3.1",
     "torch==2.10.0",
     "tqdm==4.67.3",
@@ -67,6 +69,17 @@ parametrize-names-type = "tuple"
     "ARG",      # Allow fixtures (unused arguments) and many arguments in test functions
     "SLF001",   # Allow invoking private methods in tests
     "RUF069",   # Allow float comparisons
+    "PLC2701",  # Allow importing private names from internal modules in tests
+    "N812",     # Allow `functions as F` — standard PySpark convention
+    "FBT003",   # Allow boolean positional values in function calls (e.g. F.lit(False))
+]
+
+"src/ecg_ml_stream/utils/*.py" = [
+    "FBT003", # Allow boolean positional arguments in utility functions
+]
+
+"src/ecg_ml_stream/streaming/udf.py" = [
+    "DTZ005", # Timezone argument is not needed for this project
 ]
 
 "src/ecg_ml_stream/dataset/ecg_dataset.py" = [

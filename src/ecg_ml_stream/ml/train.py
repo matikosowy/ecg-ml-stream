@@ -8,7 +8,6 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import torch
 from sklearn.metrics import f1_score
 from torch import nn
@@ -277,33 +276,6 @@ def evaluate_with_voting(
         "voting_f1_macro": f1_macro,
         "total_records": len(targets),
     }
-
-
-def voting_prediction(
-    predictions: np.ndarray,
-    mode: str = "soft",
-) -> tuple[int, np.ndarray]:
-    """Aggregate window-level predictions into a single record prediction.
-
-    Args:
-        predictions (np.ndarray): Array of shape (num_windows, num_classes) containing
-            per-window class probabilities.
-        mode (str): "soft" averages probabilities; "hard" uses majority vote
-            on argmax class indices.
-
-    Returns:
-        tuple[int, np.ndarray]: Tuple of (predicted_class_index, averaged_probabilities).
-
-    """
-    if mode == "soft":
-        avg_probs = predictions.mean(axis=0)
-        predicted_class = int(avg_probs.argmax())
-    else:
-        hard_preds = predictions.argmax(axis=1)
-        predicted_class = int(np.bincount(hard_preds, minlength=predictions.shape[1]).argmax())
-        avg_probs = predictions.mean(axis=0)
-
-    return predicted_class, avg_probs
 
 
 def main() -> None:

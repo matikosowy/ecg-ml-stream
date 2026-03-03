@@ -1,15 +1,37 @@
+x-spark-worker: &spark-worker
+  image: ecg-spark:latest
+  depends_on:
+    spark-master:
+      condition: service_healthy
+  volumes: &spark-volumes
+    - ../src:/app/src
+    - ../models:/app/models:ro
+    - spark-checkpoints:/app/checkpoints
+  networks:
+    - ecg-network
+  deploy:
+    resources:
+      limits:
+        cpus: "2.0"
+        memory: 2560M
+  healthcheck:
+    test: ["CMD-SHELL", "wget -q --spider http://localhost:8081/ || exit 1"]
+    interval: 15s
+    timeout: 10s
+    retries: 5
+    start_period: 20s
+  command: /bin/sh -c "exec spark-class org.apache.spark.deploy.worker.Worker --cores 2 --memory 2g --webui-port 8081 spark://spark-master:7077"
+
 services:
   kafka:
     image: apache/kafka:3.7.0
     container_name: kafka
     hostname: kafka
     ports:
-      - "9092:9092"
-      - "9093:9093"
       - "29092:29092"
     environment:
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker, controller
+      KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
@@ -36,12 +58,12 @@ services:
   kafka-init:
     image: apache/kafka:3.7.0
     container_name: kafka-init
+    restart: "no"
     depends_on:
       kafka:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command: |
-      "
       echo 'Creating Kafka topics...'
 
       /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
@@ -49,7 +71,7 @@ services:
         --topic ecg-pending \
         --partitions 4 \
         --replication-factor 1
-      
+
       /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
         --bootstrap-server kafka:9092 \
         --topic ecg-diagnoses \
@@ -58,9 +80,70 @@ services:
 
       echo 'Kafka topics created successfully!'
       /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server kafka:9092
-      "
     networks:
       - ecg-network
+
+  spark-master:
+    build:
+      context: ..
+      dockerfile: docker/spark.Dockerfile
+    image: ecg-spark:latest
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"   # Spark master Web UI
+      - "7077:7077"   # Master RPC port
+    command: /bin/sh -c "exec spark-class org.apache.spark.deploy.master.Master --host spark-master --port 7077 --webui-port 8080"
+    networks:
+      - ecg-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  spark-worker-1:
+    <<: *spark-worker
+    container_name: spark-worker-1
+    hostname: spark-worker-1
+    ports:
+      - "8081:8081"   # Worker 1 Web UI
+
+  spark-worker-2:
+    <<: *spark-worker
+    container_name: spark-worker-2
+    hostname: spark-worker-2
+    ports:
+      - "8082:8081"   # Worker 2 Web UI
+
+  ecg-consumer:
+    image: ecg-spark:latest
+    container_name: ecg-consumer
+    ports:
+      - "4040:4040"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      spark-master:
+        condition: service_healthy
+      spark-worker-1:
+        condition: service_healthy
+      spark-worker-2:
+        condition: service_healthy
+    volumes: *spark-volumes
+    networks:
+      - ecg-network
+    restart: on-failure
+    command: >
+      python -m ecg_ml_stream.streaming.processing
+        --kafka kafka:9092
+        --input-topic ecg-pending
+        --output-topic ecg-diagnoses
+        --model-path /app/models/ecg_resnet1d.pt
+        --checkpoint /app/checkpoints/ecg-streaming
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -82,3 +165,4 @@ networks:
 
 volumes:
   kafka-data:
+  spark-checkpoints:
