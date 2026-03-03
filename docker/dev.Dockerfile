@@ -12,11 +12,15 @@ RUN mkdir -p "src/ecg_ml_stream" \
     && pip install --no-cache-dir ".[dev]" \
     && rm -rf "src"
 
-COPY src ./src
-
 
 # Final image
 FROM python:3.11-slim AS final
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        default-jdk-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME=/usr/lib/jvm/default-java
 
 RUN addgroup --gid 1001 ecg_group \
     && adduser --uid 1001 --gid 1001 ecg_user
