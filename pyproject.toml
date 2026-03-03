@@ -108,10 +108,3 @@ line-ending = "lf"
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]
-
-[tool.pytest.ini_options]
-addopts = "--strict-markers"
-markers = [
-    "integration: tests that require a real local SparkSession (slow, needs Java)",
-    "kafka: tests that require a running Kafka broker (docker compose up)",
-]

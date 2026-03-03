@@ -23,7 +23,7 @@ from pyspark.sql.types import (
 from ecg_ml_stream.utils.mappings import PARSED_STREAM_RENAME
 from ecg_ml_stream.utils.schemas import STREAM_INPUT_SCHEMA
 
-KAFKA_RAW_SCHEMA = StructType(
+_KAFKA_RAW_SCHEMA = StructType(
     [
         StructField("key", BinaryType()),
         StructField("value", BinaryType()),
@@ -74,7 +74,24 @@ def raw_kafka_df(spark: SparkSession, sample_payload: dict) -> DataFrame:
             "timestampType": 0,
         }
     ]
-    return spark.createDataFrame(rows, schema=KAFKA_RAW_SCHEMA)
+    return spark.createDataFrame(rows, schema=_KAFKA_RAW_SCHEMA)
+
+
+@pytest.fixture
+def bad_kafka_df(spark: SparkSession) -> DataFrame:
+    """Return a DataFrame with an unparseable JSON value."""
+    rows = [
+        {
+            "key": bytearray(b"k"),
+            "value": bytearray(b"not-valid-json"),
+            "topic": "ecg-pending",
+            "partition": 0,
+            "offset": 0,
+            "timestamp": datetime(2026, 1, 1, tzinfo=UTC),
+            "timestampType": 0,
+        }
+    ]
+    return spark.createDataFrame(rows, schema=_KAFKA_RAW_SCHEMA)
 
 
 @pytest.fixture(scope="module")

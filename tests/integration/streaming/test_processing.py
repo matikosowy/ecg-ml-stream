@@ -4,27 +4,24 @@ Copyright 2026 Mateusz Golebiewski
 """
 
 import json
-from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import ArrayType, StringType
+from pyspark.sql.types import ArrayType, DoubleType, IntegerType, StringType, StructType
 
 from ecg_ml_stream.streaming.udf import create_inference_udf
 from ecg_ml_stream.utils.mappings import (
     DIAGNOSED_STREAM_RENAME,
     DIAGNOSED_STREAM_SELECT,
+    PARSED_STREAM_RENAME,
 )
-from ecg_ml_stream.utils.schemas import INFERENCE_OUTPUT_SCHEMA
-
-from .conftest import KAFKA_RAW_SCHEMA
+from ecg_ml_stream.utils.schemas import INFERENCE_OUTPUT_SCHEMA, STREAM_INPUT_SCHEMA
 
 _INFER = "ecg_ml_stream.streaming.udf.infer_ecg_record"
 
 
-@pytest.mark.integration
 class TestStreamInputSchema:
     """Tests that STREAM_INPUT_SCHEMA correctly parses ECG Kafka payloads."""
 
@@ -40,8 +37,6 @@ class TestStreamInputSchema:
         assert result == "test-exam-uuid-1234"
 
     def test_from_json_parses_sampling_rate(self, raw_kafka_df):
-        from ecg_ml_stream.utils.schemas import STREAM_INPUT_SCHEMA
-
         result = (
             raw_kafka_df.withColumn("json_value", F.col("value").cast(StringType()))
             .withColumn("data", F.from_json(F.col("json_value"), schema=STREAM_INPUT_SCHEMA))
@@ -51,8 +46,6 @@ class TestStreamInputSchema:
         assert result == 100
 
     def test_from_json_parses_signal_data_shape(self, raw_kafka_df):
-        from ecg_ml_stream.utils.schemas import STREAM_INPUT_SCHEMA
-
         result = (
             raw_kafka_df.withColumn("json_value", F.col("value").cast(StringType()))
             .withColumn("data", F.from_json(F.col("json_value"), schema=STREAM_INPUT_SCHEMA))
@@ -62,23 +55,9 @@ class TestStreamInputSchema:
         assert len(result) == 12
         assert len(result[0]) == 1000
 
-    def test_from_json_invalid_json_returns_null(self, spark):
-        from ecg_ml_stream.utils.schemas import STREAM_INPUT_SCHEMA
-
-        bad_rows = [
-            {
-                "key": bytearray(b"k"),
-                "value": bytearray(b"not-valid-json"),
-                "topic": "ecg-pending",
-                "partition": 0,
-                "offset": 0,
-                "timestamp": datetime(2026, 1, 1, tzinfo=UTC),
-                "timestampType": 0,
-            }
-        ]
-        bad_df = spark.createDataFrame(bad_rows, schema=KAFKA_RAW_SCHEMA)
+    def test_from_json_invalid_json_returns_null(self, bad_kafka_df):
         result = (
-            bad_df.withColumn("json_value", F.col("value").cast(StringType()))
+            bad_kafka_df.withColumn("json_value", F.col("value").cast(StringType()))
             .withColumn("data", F.from_json(F.col("json_value"), schema=STREAM_INPUT_SCHEMA))
             .select("data.exam_id")
             .first()[0]
@@ -94,13 +73,10 @@ class TestStreamInputSchema:
         assert result == sample_payload["exam_id"]
 
 
-@pytest.mark.integration
 class TestParsedStreamTransformations:
     """Tests the full parse -> rename -> select pipeline on a static DataFrame."""
 
     def test_output_has_expected_columns(self, parsed_df):
-        from ecg_ml_stream.utils.mappings import PARSED_STREAM_RENAME
-
         assert set(parsed_df.columns) == set(PARSED_STREAM_RENAME.values())
 
     def test_exam_id_value_correct(self, parsed_df):
@@ -120,7 +96,6 @@ class TestParsedStreamTransformations:
         assert result == "2026-01-01T10:00:00"
 
 
-@pytest.mark.integration
 class TestDiagnosedStreamTransformations:
     """Tests the diagnosed stream rename and Kafka output format."""
 
@@ -168,7 +143,6 @@ class TestDiagnosedStreamTransformations:
         assert "diagnosis_class" in parsed
 
 
-@pytest.mark.integration
 class TestCreateInferenceUdfIntegration:
     """Tests UDF registration and output schema with a real SparkSession."""
 
@@ -177,8 +151,6 @@ class TestCreateInferenceUdfIntegration:
         assert udf.returnType == INFERENCE_OUTPUT_SCHEMA
 
     def test_udf_output_columns_on_dataframe(self, spark: SparkSession, fake_diagnosis):
-        from pyspark.sql.types import DoubleType, IntegerType, StructType
-
         input_schema = StructType()\
             .add("signal_data", ArrayType(ArrayType(DoubleType())))\
             .add("sampling_rate", IntegerType())
