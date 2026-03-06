@@ -9,7 +9,7 @@ RUN pip --no-cache-dir install --upgrade pip setuptools wheel
 
 COPY pyproject.toml .
 RUN mkdir -p "src/ecg_ml_stream" \
-    && pip install --no-cache-dir "." \
+    && pip install --no-cache-dir ".[spark]" \
     && rm -rf "src"
 
 
@@ -38,7 +38,7 @@ ENV PYSPARK_PYTHON=/opt/venv/bin/python
 COPY --chown=ecg_user:ecg_group pyproject.toml .
 COPY --chown=ecg_user:ecg_group src ./src
 
-RUN pip install --no-cache-dir -e "."
+RUN pip install --no-cache-dir -e ".[spark]"
 
 ARG MAVEN=https://repo1.maven.org/maven2
 ARG SCALA=2.12

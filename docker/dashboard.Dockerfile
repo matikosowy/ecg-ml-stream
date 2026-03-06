@@ -9,18 +9,12 @@ RUN pip --no-cache-dir install --upgrade pip setuptools wheel
 
 COPY pyproject.toml .
 RUN mkdir -p "src/ecg_ml_stream" \
-    && pip install --no-cache-dir ".[all]" \
+    && pip install --no-cache-dir ".[dashboard]" \
     && rm -rf "src"
 
 
 # Final image
 FROM python:3.11-slim-bookworm AS final
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        default-jdk-headless \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV JAVA_HOME=/usr/lib/jvm/default-java
 
 RUN addgroup --gid 1001 ecg_group \
     && adduser --uid 1001 --gid 1001 ecg_user
@@ -33,5 +27,5 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY --chown=ecg_user:ecg_group pyproject.toml .
 COPY --chown=ecg_user:ecg_group src ./src
 
-RUN pip install --no-cache-dir -e ".[all]"
+RUN pip install --no-cache-dir -e ".[dashboard]"
 USER ecg_user:ecg_group
