@@ -3,11 +3,11 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
 import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-from ecg_ml_stream.utils.constants import ECG_LEAD_NAMES, CLASS_COLORS
+from ecg_ml_stream.utils.constants import CLASS_COLORS, ECG_LEAD_NAMES
 
 
 def create_ecg_plot(
@@ -16,19 +16,20 @@ def create_ecg_plot(
     selected_leads: list[str] | None = None,
 ) -> go.Figure:
     """Render a multi-lead ECG signal as a stacked Plotly figure.
-    
+
     Args:
         signal_data (list[list[float]]): Nested list of shape (num_leads, num_samples).
         sampling_rate (int): Sampling rate of the ECG signal in Hz.
-        selected_leads (list[str] | None): List of leads to display. If None, all leads are displayed.
+        selected_leads (list[str] | None): List of leads to display.
+            If None, all leads are displayed.
 
     Returns:
         go.Figure: A Plotly figure containing the ECG signal plots.
-    
+
     """
     if selected_leads is None:
         selected_leads = list(range(len(signal_data)))
-    
+
     num_leads = len(selected_leads)
     num_samples = len(signal_data[0]) if signal_data else 0
     time_axis = np.arange(num_samples) / sampling_rate
@@ -56,13 +57,13 @@ def create_ecg_plot(
                 },
                 showlegend=False,
             ),
-            row=idx+1,
+            row=idx + 1,
             col=1,
         )
 
         fig.update_yaxes(
             title_text=ECG_LEAD_NAMES[lead_idx],
-            row=idx+1,
+            row=idx + 1,
             col=1,
             showgrid=True,
             gridcolor="rgba(255,192,203,0.3)",
@@ -91,8 +92,8 @@ def create_ecg_plot(
                 "b": 40,
             },
         )
-        return fig
-    
+    return fig
+
 
 def create_probability_chart(probabilities: dict[str, float]) -> go.Figure:
     """Render a bar chart of per-class diagnosis probabilities.
@@ -102,6 +103,7 @@ def create_probability_chart(probabilities: dict[str, float]) -> go.Figure:
 
     Returns:
         go.Figure: Plotly Figure with one bar per class.
+
     """
     classes = list(probabilities.keys())
     probs = [probabilities[c] * 100 for c in classes]
@@ -125,11 +127,6 @@ def create_probability_chart(probabilities: dict[str, float]) -> go.Figure:
         yaxis_title="Probability [%]",
         yaxis_range=[0, 100],
         height=300,
-        margin={
-            "l": 40,
-            "r": 20,
-            "t": 40,
-            "b": 40
-        },
+        margin={"l": 40, "r": 20, "t": 40, "b": 40},
     )
     return fig

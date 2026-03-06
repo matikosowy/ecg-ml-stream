@@ -3,11 +3,11 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
-from kafka import KafkaConsumer
-from kafka.errors import KafkaError
+import json
 
 import streamlit as st
-import json
+from kafka import KafkaConsumer
+from kafka.errors import KafkaError
 
 
 def get_kafka_consumer(
@@ -16,7 +16,7 @@ def get_kafka_consumer(
     group_id: str,
 ) -> KafkaConsumer | None:
     """Create a Kafka consumer for the specified topic.
-    
+
     Args:
         bootstrap_servers (str): Comma-separated list of Kafka bootstrap servers.
         topic (str): Kafka topic to subscribe to.
@@ -24,7 +24,7 @@ def get_kafka_consumer(
 
     Returns:
         KafkaConsumer | None: A KafkaConsumer instance if successful, or None if an error occurs.
-    
+
     """
     try:
         return KafkaConsumer(
@@ -43,10 +43,10 @@ def get_kafka_consumer(
 
 def parse_diagnosis_message(message: dict) -> dict | None:
     """Normalize a raw Kafka diagnosis message into a flat dictionary format.
-    
+
     Args:
         message (dict): The raw Kafka message containing ECG diagnosis data.
-        
+
     Returns:
         dict | None: Normalized diagnosis dictionary, or None if parsing fails.
 
@@ -55,7 +55,7 @@ def parse_diagnosis_message(message: dict) -> dict | None:
         all_probs = message.get("all_probabilities")
         if isinstance(all_probs, str):
             all_probs = json.loads(all_probs)
-        
+
         signal_data = message.get("signal_data")
         if isinstance(signal_data, str):
             signal_data = json.loads(signal_data)
@@ -80,6 +80,6 @@ def parse_diagnosis_message(message: dict) -> dict | None:
             "signal_data": signal_data,
             "sampling_rate": message.get("sampling_rate", 100),
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - Catch all exceptions for parsing errors
         st.error(f"Message parsing error: {e}")
         return None

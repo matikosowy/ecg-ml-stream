@@ -3,25 +3,18 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
-import json
 import os
-
 from collections import deque
 from datetime import datetime
 
 import numpy as np
-from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
-from ecg_ml_stream.dashboard.plotting import create_ecg_plot, create_probability_chart
 import plotly.graph_objects as go
 import streamlit as st
-
-from kafka import KafkaConsumer
-from kafka.errors import KafkaError
-
 from streamlit_autorefresh import st_autorefresh
 
-from ecg_ml_stream.utils.constants import CLASS_DESCRIPTIONS, ECG_LEAD_NAMES, CLASS_COLORS
-
+from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
+from ecg_ml_stream.dashboard.plotting import create_ecg_plot, create_probability_chart
+from ecg_ml_stream.utils.constants import CLASS_COLORS, CLASS_DESCRIPTIONS, ECG_LEAD_NAMES
 
 st.set_page_config(
     page_title="Monitoring EKG",
@@ -60,21 +53,18 @@ def main() -> None:
             options=list(CLASS_DESCRIPTIONS.keys()),
             default=list(CLASS_DESCRIPTIONS.keys()),
         )
-    
+
     # Session state init
-    if (
-        "diagnoses" not in st.session_state
-        or st.session_state.diagnoses.maxlen != max_records
-    ):
+    if "diagnoses" not in st.session_state or st.session_state.diagnoses.maxlen != max_records:
         old = list(st.session_state.get("diagnoses", []))
         st.session_state.diagnoses = deque(old[:max_records], maxlen=max_records)
 
     if "last_update" not in st.session_state:
-        st.session_state.last_update = datetime.now()
+        st.session_state.last_update = datetime.now()  # noqa: DTZ005 - No timezone needed
 
     if "selected_exam" not in st.session_state:
         st.session_state.selected_exam = None
-    
+
     # Pull new messages from Kafka
     if auto_refresh:
         try:
@@ -88,11 +78,11 @@ def main() -> None:
                     parsed = parse_diagnosis_message(message.value)
                     if parsed:
                         st.session_state.diagnoses.appendleft(parsed)
-                        st.session_state.last_update = datetime.now()
+                        st.session_state.last_update = datetime.now()  # noqa: DTZ005 - No timezone needed
                 consumer.close()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - Catch all exceptions for connection errors
             st.warning(f"Cannot connect to Kafka: {e}")
-    
+
     # Top row: metrics
     col1, col2, col3, col4 = st.columns(4)
     all_diagnoses = list(st.session_state.diagnoses)
@@ -107,9 +97,7 @@ def main() -> None:
         st.metric("Wymaga interwencji", dangerous_count)
     with col4:
         avg_time = (
-            np.mean([d.get("processing_time_ms", 0) for d in all_diagnoses])
-            if all_diagnoses
-            else 0
+            np.mean([d.get("processing_time_ms", 0) for d in all_diagnoses]) if all_diagnoses else 0
         )
         st.metric("Śr. czas przetwarzania (ms)", f"{avg_time:.0f}")
 
@@ -121,7 +109,8 @@ def main() -> None:
         st.subheader("Lista badań")
 
         filtered_diagnoses = [
-            d for d in all_diagnoses
+            d
+            for d in all_diagnoses
             if d.get("diagnosis_class") in selected_classes
             and (not show_dangerous_only or d.get("is_dangerous"))
         ]
@@ -141,17 +130,17 @@ def main() -> None:
                         ts = processed[:19] if processed else "brak"
                         st.markdown(
                             f"**{icon} {diag['diagnosis_class']}**"
-                            f" - {diag["diagnosis_probability"] * 100:.1f}%  \n"
+                            f" - {diag['diagnosis_probability'] * 100:.1f}%  \n"
                             f"{diag['hospital_name']}  \n"
                             f"{ts}"
                         )
-                        
+
                     with col_b:
                         if st.button("Szczegóły", key=f"btn_{idx}_{diag['exam_id'][:8]}"):
                             st.session_state.selected_exam = diag
-                    
+
                     st.markdown("---")
-    
+
     with right_col:
         st.subheader("Szczegóły badania")
         selected = st.session_state.selected_exam
@@ -174,7 +163,7 @@ def main() -> None:
                     f"- Płeć: {selected['patient_sex'] or 'brak'}  \n"
                     f"- ID badania: {selected['patient_ecg_id']}"
                 )
-            
+
             st.markdown("---")
 
             is_dangerous = selected["is_dangerous"]
@@ -191,18 +180,18 @@ def main() -> None:
                     f"**Diagnoza: {diag_class}** ({diag_prob:.1f}%). \n"
                     f"{CLASS_DESCRIPTIONS.get(diag_class, '')}"
                 )
-            
+
             if selected.get("ground_truth"):
                 correct = selected["ground_truth"] == diag_class
                 icon = "✅" if correct else "❌"
                 st.info(f"Rzeczywista diagnoza: **{selected['ground_truth']}** [{icon}]")
-            
+
             if selected.get("all_probabilities"):
                 st.plotly_chart(
                     create_probability_chart(selected["all_probabilities"]),
                     use_container_width=True,
                 )
-            
+
             if selected.get("signal_data"):
                 st.markdown("### Sygnał EKG")
 
@@ -224,7 +213,7 @@ def main() -> None:
                     )
         else:
             st.info("Wybierz badanie z listy, aby zobaczyć szczegóły.")
-    
+
     # Statystyki
     st.markdown("---")
     st.subheader("Statystyki")
@@ -254,9 +243,7 @@ def main() -> None:
 
         with col_stat2:
             times = [
-                d.get("processing_time_ms", 0)
-                for d in all_diagnoses
-                if d.get("processing_time_ms")
+                d.get("processing_time_ms", 0) for d in all_diagnoses if d.get("processing_time_ms")
             ]
             if times:
                 st.markdown(
@@ -269,14 +256,13 @@ def main() -> None:
                 )
 
                 correct = sum(
-                    1 for d in all_diagnoses
-                    if d.get("ground_truth") == d.get("diagnosis_class")
+                    1 for d in all_diagnoses if d.get("ground_truth") == d.get("diagnosis_class")
                 )
                 total_with_gt = sum(1 for d in all_diagnoses if d.get("ground_truth"))
                 if total_with_gt > 0:
                     accuracy = correct / total_with_gt * 100
                     st.markdown(f"- **{accuracy:.1f}%** ({correct}/{total_with_gt})")
-            
+
     if auto_refresh:
         st_autorefresh(interval=refresh_interval * 1000, key="ecg_autorefresh")
 

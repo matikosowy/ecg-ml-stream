@@ -101,6 +101,14 @@ parametrize-names-type = "tuple"
     "FBT002", # Allow boolean positional arguments in helper functions
 ]
 
+"src/ecg_ml_stream/dashboard/app.py" = [
+    "C901", # Allow complex function for rendering the dashboard
+    "PLR0912", # Allow many branches in the dashboard rendering function
+    "PLR0915", # Allow many statements in the dashboard rendering function
+    "PLR0914", # Allow many variables in the dashboard rendering function
+    "PLR1702", # Allow many nested blocks in the dashboard rendering function
+]
+
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["df"]
 
