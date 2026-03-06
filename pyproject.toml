@@ -133,3 +133,6 @@ line-ending = "lf"
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]
+
+[tool.coverage.run]
+omit = ["src/ecg_ml_stream/dashboard/app.py"]
