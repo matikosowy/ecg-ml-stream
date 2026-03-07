@@ -3,6 +3,7 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
+
 import pytest
 
 from ecg_ml_stream.config.settings import _cast, load_config
@@ -25,7 +26,7 @@ class TestCast:
         assert _cast("42", int) == 42
 
     def test_float(self):
-        assert _cast("3.14", float) == pytest.approx(3.14)
+        assert _cast("3.33", float) == pytest.approx(3.33)
 
     def test_str_passthrough(self):
         assert _cast("kafka:9092", str) == "kafka:9092"
