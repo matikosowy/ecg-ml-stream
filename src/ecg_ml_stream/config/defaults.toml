@@ -1,0 +1,73 @@
+# Global configuration for ECG-ML-STREAM.
+# These can be overridden by environment variables or command-line arguments.
+# Template:
+#   export ECG_{SECTION}_{KEY}="value"
+# Example env var usage:
+#   export ECG_MODEL_PATH="/app/models/ecg_resnet1d.pt"
+#   export ECG_DATA_SAMPLING_RATE=500
+
+
+[kafka]
+bootstrap_servers = "localhost:29092"
+topic_pending = "ecg-pending"
+topic_diagnoses = "ecg-diagnoses"
+num_partitions = 4
+replication_factor = 1
+consumer_group = "dashboard-consumer"
+consumer_timeout_ms = 500
+
+[data]
+path = "data/ptb-xl-1.0.3"
+sampling_rate = 100
+window_size_sec = 2.5
+window_stride_sec = 1.25
+duration_sec = 10.0
+num_leads = 12
+
+[model]
+path = "/app/models/ecg_resnet1d.pt"
+base_filters = 64
+kernel_size = 7
+num_blocks = [2, 2, 2, 2]
+dropout = 0.2
+
+[spark]
+app_name = "ECG-ML-STREAM"
+shuffle_partitions = 4
+parallelism = 4
+executor_memory = "2g"
+executor_cores = 2
+driver_memory = "2g"
+driver_cores = 2
+checkpoint_path = "/app/checkpoints/ecg-streaming"
+trigger_interval = "1 seconds"
+max_offsets_per_trigger = 100
+
+[dashboard]
+port = 8501
+refresh_interval = 2
+max_records = 50
+default_leads = [0, 1, 6, 7, 8]
+
+[producer]
+num_threads = 4
+interval_sec = 5.0
+
+[training]
+batch_size = 64
+epochs = 50
+lr = 1e-3
+weight_decay = 1e-4
+patience = 10
+num_workers = 4
+seed = 42
+output_dir = "models"
+grad_clip_norm = 1.0
+scheduler_factor = 0.5
+scheduler_patience = 5
+voting_eval_interval = 5
+voting_eval_samples = 200
+
+[logging]
+dir = "logs"
+format = "%(asctime)s - %(levelname)s - %(message)s"

@@ -18,6 +18,7 @@ from typing import ClassVar
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.dataset.ecg_dataset import ECGDataset
 from ecg_ml_stream.utils.constants import ECG_LEAD_NAMES
 from ecg_ml_stream.utils.helpers import setup_logging
@@ -49,24 +50,30 @@ class ECGProducer:
 
     def __init__(
         self,
-        bootstrap_servers: str = "localhost:29092",
-        topic: str = "ecg-pending",
-        data_path: str = "data/ptb-xl-1.0.3",
-        num_threads: int = 4,
-        interval_sec: int = 5.0,
-        sampling_rate: int = 100,
+        bootstrap_servers: str | None = None,
+        topic: str | None = None,
+        data_path: str | None = None,
+        num_threads: int | None = None,
+        interval_sec: float | None = None,
+        sampling_rate: int | None = None,
     ) -> None:
         """Initialize ECGProducer.
 
         Args:
-            bootstrap_servers (str): Kafka broker addresses. Defaults to "localhost:29092".
-            topic (str): Kafka topic name. Defaults to "ecg-pending".
-            data_path (str): Path to PTB-XL data. Defaults to "data/ptb-xl-1.0.3".
-            num_threads (int): Number of threads to simulate hospitals. Defaults to 4.
-            interval_sec (float): Interval in seconds between ECG records. Defaults to 5.0.
-            sampling_rate (int): Sampling rate in Hz. Defaults to 100.
+            bootstrap_servers (str): Kafka broker addresses.
+            topic (str): Kafka topic name.
+            data_path (str): Path to PTB-XL data.
+            num_threads (int): Number of threads to simulate hospitals.
+            interval_sec (float): Interval in seconds between ECG records.
+            sampling_rate (int): Sampling rate in Hz.
 
         """
+        bootstrap_servers = bootstrap_servers or cfg.kafka.bootstrap_servers
+        topic = topic or cfg.kafka.topic_pending
+        data_path = data_path or cfg.data.path
+        num_threads = num_threads if num_threads is not None else cfg.producer.num_threads
+        interval_sec = interval_sec if interval_sec is not None else cfg.producer.interval_sec
+        sampling_rate = sampling_rate if sampling_rate is not None else cfg.data.sampling_rate
         self.bootstrap_servers = bootstrap_servers
         self.topic = topic
         self.num_threads = num_threads
@@ -123,8 +130,8 @@ class ECGProducer:
             "signal": {
                 "data": sample["signal"],
                 "sampling_rate": self.sampling_rate,
-                "num_channels": 12,
-                "duration_sec": 10.0,
+                "num_channels": cfg.data.num_leads,
+                "duration_sec": cfg.data.duration_sec,
                 "leads": ECG_LEAD_NAMES,
             },
             "metadata": {
@@ -231,43 +238,43 @@ class ECGProducer:
 
 def main() -> None:
     """Entry point for the ECG Kafka Producer."""
-    setup_logging("logs", "producer")
+    setup_logging(cfg.logging.dir, "producer")
     parser = argparse.ArgumentParser(description="ECG Kafka Producer")
 
     parser.add_argument(
         "--bootstrap-servers",
         type=str,
-        default="localhost:29092",
+        default=cfg.kafka.bootstrap_servers,
         help="Kafka broker addresses",
     )
     parser.add_argument(
         "--topic",
         type=str,
-        default="ecg-pending",
+        default=cfg.kafka.topic_pending,
         help="Kafka topic name",
     )
     parser.add_argument(
         "--data-path",
         type=str,
-        default="data/ptb-xl-1.0.3",
+        default=cfg.data.path,
         help="Path to PTB-XL data root directory",
     )
     parser.add_argument(
         "--num-threads",
         type=int,
-        default=4,
+        default=cfg.producer.num_threads,
         help="Number of producer threads",
     )
     parser.add_argument(
         "--interval",
         type=float,
-        default=5.0,
+        default=cfg.producer.interval_sec,
         help="Interval in seconds",
     )
     parser.add_argument(
         "--sampling-rate",
         type=int,
-        default=100,
+        default=cfg.data.sampling_rate,
         choices=[100, 500],
         help="ECG sampling rate in Hz",
     )

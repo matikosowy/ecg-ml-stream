@@ -33,6 +33,7 @@ _DIAGNOSED_EXPECTED: dict[str, str] = {
 _SELECT_EXPECTED: list[str] = [
     "exam_id",
     "timestamp_sent",
+    "timestamp_processed",
     "hospital",
     "patient",
     "metadata",
@@ -145,8 +146,8 @@ class TestDiagnosedStreamSelect:
     def test_contains_leads(self):
         assert "leads" in DIAGNOSED_STREAM_SELECT
 
-    def test_has_eight_entries(self):
-        assert len(DIAGNOSED_STREAM_SELECT) == 8
+    def test_has_nine_entries(self):
+        assert len(DIAGNOSED_STREAM_SELECT) == 9
 
     def test_no_duplicates(self):
         assert len(DIAGNOSED_STREAM_SELECT) == len(set(DIAGNOSED_STREAM_SELECT))

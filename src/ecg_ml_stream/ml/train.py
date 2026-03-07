@@ -14,6 +14,7 @@ from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.dataset.ecg_dataset import ECGAugmentation, ECGDataset
 from ecg_ml_stream.ml.metrics import (
     AverageMeter,
@@ -23,7 +24,7 @@ from ecg_ml_stream.ml.metrics import (
     save_training_history,
 )
 from ecg_ml_stream.ml.model import ECGClassifier, ResNet1D
-from ecg_ml_stream.utils.constants import CLASS_NAMES
+from ecg_ml_stream.utils.constants import CLASS_NAMES, NUM_CLASSES
 from ecg_ml_stream.utils.helpers import (
     count_parameters,
     get_device,
@@ -45,86 +46,86 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-path",
         type=str,
-        default="data/ptb-xl-1.0.3",
+        default=cfg.data.path,
         help="Path to the PTX-XL dataset directory",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="models",
+        default=cfg.training.output_dir,
         help="Directory for saved models and logs",
     )
     parser.add_argument(
         "--sampling-rate",
         type=int,
-        default=100,
+        default=cfg.data.sampling_rate,
         choices=[100, 500],
         help="Sampling rate for ECG signals (Hz)",
     )
     parser.add_argument(
         "--window-size",
         type=float,
-        default=2.5,
+        default=cfg.data.window_size_sec,
         help="Window size for training (seconds)",
     )
     parser.add_argument(
         "--window-stride",
         type=float,
-        default=1.25,
+        default=cfg.data.window_stride_sec,
         help="Stride between windows (seconds)",
     )
     parser.add_argument(
         "--base-filters",
         type=int,
-        default=64,
+        default=cfg.model.base_filters,
         help="Number of filters in the first ResNet block",
     )
     parser.add_argument(
         "--dropout",
         type=float,
-        default=0.2,
+        default=cfg.model.dropout,
         help="Dropout rate in the ResNet1D model",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=64,
+        default=cfg.training.batch_size,
         help="Batch size for training",
     )
     parser.add_argument(
         "--epochs",
         type=int,
-        default=50,
+        default=cfg.training.epochs,
         help="Number of training epochs",
     )
     parser.add_argument(
         "--lr",
         type=float,
-        default=1e-3,
+        default=cfg.training.lr,
         help="Learning rate for the optimizer",
     )
     parser.add_argument(
         "--weight-decay",
         type=float,
-        default=1e-4,
+        default=cfg.training.weight_decay,
         help="Weight decay (L2) for the AdamW optimizer",
     )
     parser.add_argument(
         "--patience",
         type=int,
-        default=10,
+        default=cfg.training.patience,
         help="Patience for early stopping",
     )
     parser.add_argument(
         "--num-workers",
         type=int,
-        default=4,
+        default=cfg.training.num_workers,
         help="Number of worker processes for data loading",
     )
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
+        default=cfg.training.seed,
         help="Random seed for reproducibility",
     )
     parser.add_argument(
@@ -173,7 +174,7 @@ def train_epoch(
         loss = criterion(output, target)
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.training.grad_clip_norm)
 
         optimizer.step()
 
@@ -358,8 +359,8 @@ def main() -> None:
     )
 
     model = ResNet1D(
-        input_channels=12,
-        num_classes=5,
+        input_channels=cfg.data.num_leads,
+        num_classes=NUM_CLASSES,
         base_filters=args.base_filters,
         dropout=args.dropout,
     ).to(device)
@@ -378,8 +379,8 @@ def main() -> None:
     scheduler = ReduceLROnPlateau(
         optimizer,
         mode="max",
-        factor=0.5,
-        patience=5,
+        factor=cfg.training.scheduler_factor,
+        patience=cfg.training.scheduler_patience,
     )
     early_stopping = EarlyStopping(args.patience, mode="max")
 
@@ -433,7 +434,7 @@ def main() -> None:
         f1_parts = [f"{name}={val_metrics.get(f'f1_{name}', 0):.3f}" for name in CLASS_NAMES]
         logger.info("Val F1 per-class: %s", ", ".join(f1_parts))
 
-        if (epoch + 1) % 5 == 0:
+        if (epoch + 1) % cfg.training.voting_eval_interval == 0:
             val_calc = MetricsCalculator()
             model.eval()
             with torch.no_grad():
@@ -446,7 +447,7 @@ def main() -> None:
                 model,
                 val_dataset,
                 device,
-                num_samples=200,
+                num_samples=cfg.training.voting_eval_samples,
             )
             logger.info(
                 "Voting F1 (val subset): acc=%.4f f1=%.4f",

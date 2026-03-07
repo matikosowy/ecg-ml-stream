@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.ml.model import ECGClassifier
 from ecg_ml_stream.utils.helpers import create_sliding_windows, setup_logging
 
@@ -24,7 +25,7 @@ class _ModelCache:
 _cache = _ModelCache()
 
 
-def get_model(model_path: str = "/app/models/ecg_resnet1d.pt") -> ECGClassifier:
+def get_model(model_path: str | None = None) -> ECGClassifier:
     """Return a ECGClassifier, loading it from disk on first call.
 
     The model is laoded once per Spark partition. Following calls
@@ -37,6 +38,8 @@ def get_model(model_path: str = "/app/models/ecg_resnet1d.pt") -> ECGClassifier:
         ECGClassifier: Loaded ECG classification model.
 
     """
+    model_path = model_path or cfg.model.path
+
     if _cache.instance is None or _cache.path != model_path:
         _cache.path = model_path
 
@@ -52,8 +55,8 @@ def get_model(model_path: str = "/app/models/ecg_resnet1d.pt") -> ECGClassifier:
 
 def infer_ecg_record(
     signal_data: list[list[float]],
-    sampling_rate: int,
-    model_path: str = "/app/models/ecg_resnet1d.pt",
+    sampling_rate: int | None = None,
+    model_path: str | None = None,
 ) -> dict[str, any]:
     """Run full inference pipeline on a single ECG record.
 
@@ -69,14 +72,13 @@ def infer_ecg_record(
         dict: Inference results containing predicted label and confidence.
 
     """
+    sampling_rate = sampling_rate if sampling_rate is not None else cfg.data.sampling_rate
+    model_path = model_path or cfg.model.path
+
     signal = np.stack([np.asarray(ch, dtype=np.float32) for ch in signal_data])
 
-    if sampling_rate == 100:
-        window_size = 250  # 2.5s @ 100Hz
-        stride = 125  # 1.25s @ 100Hz
-    else:
-        window_size = 1250
-        stride = 625
+    window_size = int(cfg.data.window_size_sec * sampling_rate)
+    stride = int(cfg.data.window_stride_sec * sampling_rate)
 
     windows = create_sliding_windows(signal, window_size, stride, normalize=True)
 

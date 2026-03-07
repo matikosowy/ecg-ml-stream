@@ -9,6 +9,8 @@ import streamlit as st
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
+from ecg_ml_stream.config import cfg
+
 
 def get_kafka_consumer(
     bootstrap_servers: str,
@@ -34,7 +36,7 @@ def get_kafka_consumer(
             auto_offset_reset="latest",
             enable_auto_commit=True,
             group_id=group_id,
-            consumer_timeout_ms=500,
+            consumer_timeout_ms=cfg.kafka.consumer_timeout_ms,
         )
     except KafkaError as e:
         st.error(f"Kafka connection error: {e}")
@@ -78,7 +80,7 @@ def parse_diagnosis_message(message: dict) -> dict | None:
             "processing_time_ms": message.get("processing_time_ms", 0),
             "ground_truth": message.get("metadata", {}).get("ground_truth_name"),
             "signal_data": signal_data,
-            "sampling_rate": message.get("sampling_rate", 100),
+            "sampling_rate": message.get("sampling_rate", cfg.data.sampling_rate),
         }
     except Exception as e:  # noqa: BLE001 - Catch all exceptions for parsing errors
         st.error(f"Message parsing error: {e}")

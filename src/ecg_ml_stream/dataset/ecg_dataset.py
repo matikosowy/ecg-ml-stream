@@ -14,6 +14,7 @@ import torch
 import wfdb
 from torch.utils.data import DataLoader, Dataset
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.utils.constants import CLASS_NAMES, SUPERCLASS_MAPPING, SUPERCLASS_PRIORITY
 from ecg_ml_stream.utils.helpers import normalize_signal
 
@@ -32,10 +33,10 @@ class ECGDataset(Dataset):
 
     def __init__(
         self,
-        data_path: str,
-        sampling_rate: int = 100,
-        window_size: float = 2.5,
-        window_stride: float = 1.25,
+        data_path: str | None = None,
+        sampling_rate: int | None = None,
+        window_size: float | None = None,
+        window_stride: float | None = None,
         split: str = "train",
         transforms: Callable | None = None,
     ) -> None:
@@ -52,6 +53,11 @@ class ECGDataset(Dataset):
             transforms (callable): Optional. Transformations to apply to each window.
 
         """
+        data_path = data_path or cfg.data.path
+        sampling_rate = sampling_rate if sampling_rate is not None else cfg.data.sampling_rate
+        window_size = window_size if window_size is not None else cfg.data.window_size_sec
+        window_stride = window_stride if window_stride is not None else cfg.data.window_stride_sec
+
         self.data_path = Path(data_path)
         self.sampling_rate = sampling_rate
         self.window_size = int(window_size * sampling_rate)
@@ -280,10 +286,10 @@ class ECGDataset(Dataset):
 
 
 def create_dataloaders(
-    data_path: str,
-    batch_size: int = 32,
-    sampling_rate: int = 100,
-    num_workers: int = 4,
+    data_path: str | None = None,
+    batch_size: int | None = None,
+    sampling_rate: int | None = None,
+    num_workers: int | None = None,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Create DataLoaders for the train, validation and test splits.
 
@@ -298,6 +304,11 @@ def create_dataloaders(
         and test DataLoaders.
 
     """
+    data_path = data_path or cfg.data.path
+    batch_size = batch_size if batch_size is not None else cfg.training.batch_size
+    sampling_rate = sampling_rate if sampling_rate is not None else cfg.data.sampling_rate
+    num_workers = num_workers if num_workers is not None else cfg.training.num_workers
+
     train_dataset = ECGDataset(data_path, sampling_rate, split="train")
     val_dataset = ECGDataset(data_path, sampling_rate, split="val")
     test_dataset = ECGDataset(data_path, sampling_rate, split="test")
