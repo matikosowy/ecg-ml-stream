@@ -145,6 +145,27 @@ services:
         --model-path /app/models/ecg_resnet1d.pt
         --checkpoint /app/checkpoints/ecg-streaming
 
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/dashboard.Dockerfile
+    image: ecg-dashboard:latest
+    container_name: ecg-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    volumes:
+      - ../src:/app/src
+    networks:
+      - ecg-network
+    command: streamlit run src/ecg_ml_stream/dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui

@@ -37,14 +37,14 @@ class ECGProducer:
     """
 
     HOSPITALS: ClassVar[list[dict]] = [
-        {"id": "HOSP_001", "name": "University Hospital Krakow", "city": "Krakow"},
-        {"id": "HOSP_002", "name": "Clinical Hospital Warsaw", "city": "Warsaw"},
-        {"id": "HOSP_003", "name": "Cardiology Center Poznan", "city": "Poznan"},
-        {"id": "HOSP_004", "name": "Specialist Hospital Gdansk", "city": "Gdansk"},
-        {"id": "HOSP_005", "name": "Cardiology Clinic Wroclaw", "city": "Wroclaw"},
-        {"id": "HOSP_006", "name": "City Hospital Lodz", "city": "Lodz"},
-        {"id": "HOSP_007", "name": "Medical Center Katowice", "city": "Katowice"},
-        {"id": "HOSP_008", "name": "Regional Hospital Lublin", "city": "Lublin"},
+        {"id": "HOSP_001", "name": "Szpital Uniwersytecki w Krakowie", "city": "Kraków"},
+        {"id": "HOSP_002", "name": "Szpital Kliniczny w Warszawie", "city": "Warszawa"},
+        {"id": "HOSP_003", "name": "Centrum Kardiologiczne w Poznaniu", "city": "Poznań"},
+        {"id": "HOSP_004", "name": "Szpital Specjalistyczny w Gdańsku", "city": "Gdańsk"},
+        {"id": "HOSP_005", "name": "Klinika Kardiologiczna we Wrocławiu", "city": "Wrocław"},
+        {"id": "HOSP_006", "name": "Szpital Miejski w Łodzi", "city": "Łódź"},
+        {"id": "HOSP_007", "name": "Centrum Medyczne Katowice", "city": "Katowice"},
+        {"id": "HOSP_008", "name": "Szpital Regionalny w Lublinie", "city": "Lublin"},
     ]
 
     def __init__(

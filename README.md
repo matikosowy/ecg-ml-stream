@@ -27,18 +27,19 @@ pip install .
 
 ---
 
-### Start the Spark Streaming stack
+### Build and start the application stack
 ```
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-This starts: Kafka, Spark master + 2 workers, ECG consumer, Kafka UI.
+This starts: Kafka, Spark master + 2 workers, ECG consumer, Kafka UI, and Streamlit Dashboard.
 
 | Service | URL |
 | --- | --- |
 | Kafka UI | http://localhost:8090 |
 | Spark master | http://localhost:8080 |
 | Spark driver | http://localhost:4040 |
+| Streamlit Dashboard | http://localhost:8501 |
 
 ### Stop the stack
 ```

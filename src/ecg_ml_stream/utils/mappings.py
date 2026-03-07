@@ -28,6 +28,7 @@ DIAGNOSED_STREAM_RENAME = {
 DIAGNOSED_STREAM_SELECT = [
     "exam_id",
     "timestamp_sent",
+    "timestamp_processed",
     "hospital",
     "patient",
     "metadata",
@@ -35,3 +36,11 @@ DIAGNOSED_STREAM_SELECT = [
     "sampling_rate",
     "leads",
 ]
+
+CLASS_TRANSLATIONS = {
+    "Normal sinus rhythm": "Prawidłowy rytm zatokowy",
+    "Myocardial infarction": "Zawał mięśnia sercowego",
+    "ST/T-wave changes": "Zmiany odcinka ST i załamka T",
+    "Conduction disturbance": "Zaburzenia przewodzenia",
+    "Cardiac hypertrophy": "Przerost serca",
+}

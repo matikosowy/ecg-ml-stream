@@ -14,12 +14,6 @@ dependencies = [
     "kafka-python==2.3.0",
     "pandas==2.2.3",
     "numpy==2.4.2",
-    "pyarrow==19.0.1",
-    "pyspark==3.5.3",
-    "wfdb==4.3.1",
-    "torch==2.10.0",
-    "tqdm==4.67.3",
-    "scikit-learn==1.8.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +22,29 @@ dev = [
     "pytest-cov==7.0.0",
     "ruff==0.15.1",
     "genbadge[coverage]",
+]
+
+train = [
+    "torch==2.10.0",
+    "tqdm==4.67.3",
+    "scikit-learn==1.8.0",
+    "wfdb==4.3.1",
+]
+
+spark = [
+    "pyspark==3.5.3",
+    "pyarrow==19.0.1",
+    "torch==2.10.0",
+]
+
+dashboard = [
+    "plotly==6.5.2",
+    "streamlit==1.54.0",
+    "streamlit-autorefresh==1.0.1",
+]
+
+all = [
+    "ecg-ml-stream[dev,train,spark,dashboard]",
 ]
 
 [tool.setuptools.packages.find]
@@ -98,6 +115,14 @@ parametrize-names-type = "tuple"
     "FBT002", # Allow boolean positional arguments in helper functions
 ]
 
+"src/ecg_ml_stream/dashboard/app.py" = [
+    "C901", # Allow complex function for rendering the dashboard
+    "PLR0912", # Allow many branches in the dashboard rendering function
+    "PLR0915", # Allow many statements in the dashboard rendering function
+    "PLR0914", # Allow many variables in the dashboard rendering function
+    "PLR1702", # Allow many nested blocks in the dashboard rendering function
+]
+
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["df"]
 
@@ -108,3 +133,6 @@ line-ending = "lf"
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]
+
+[tool.coverage.run]
+omit = ["src/ecg_ml_stream/dashboard/app.py"]

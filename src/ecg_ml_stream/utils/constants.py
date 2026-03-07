@@ -41,3 +41,11 @@ ECG_LEAD_NAMES: list[str] = [
     "V5",
     "V6",
 ]
+
+CLASS_COLORS: dict[str, str] = {
+    "NORM": "#4caf50",
+    "MI": "#f44336",
+    "STTC": "#ff9800",
+    "CD": "#9c27b0",
+    "HYP": "#2196f3",
+}
