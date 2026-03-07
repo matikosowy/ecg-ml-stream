@@ -10,12 +10,13 @@ import pandas as pd
 from pyspark.sql.functions import pandas_udf
 from pyspark.sql.udf import UserDefinedFunction
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.ml.inference import infer_ecg_record
 from ecg_ml_stream.utils.schemas import INFERENCE_OUTPUT_SCHEMA
 
 
 def create_inference_udf(
-    model_path: str = "/app/models/ecg_resnet1d.pt",
+    model_path: str | None = None,
 ) -> UserDefinedFunction:
     """Return a pandas UDF that runs ECG inference with the given model path.
 
@@ -26,6 +27,7 @@ def create_inference_udf(
         UserDefinedFunctionLike: Registered pandas UDF ready for use in Spark.
 
     """
+    model_path = model_path or cfg.model.path
 
     @pandas_udf(INFERENCE_OUTPUT_SCHEMA)
     def _udf(

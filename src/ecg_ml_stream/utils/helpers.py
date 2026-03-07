@@ -12,6 +12,8 @@ import numpy as np
 import torch
 from torch import nn
 
+from ecg_ml_stream.config import cfg
+
 
 def normalize_signal(signal: np.ndarray) -> np.ndarray:
     """Apply per-channel Z-score normalization to a signal array.
@@ -28,13 +30,15 @@ def normalize_signal(signal: np.ndarray) -> np.ndarray:
     return (signal - mean) / std
 
 
-def set_seed(seed: int = 42) -> None:
+def set_seed(seed: int | None = None) -> None:
     """Set random seed for reproducibility across all libraries.
 
     Args:
         seed: Integer seed value.
 
     """
+    seed = seed if seed is not None else cfg.training.seed
+
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -42,7 +46,7 @@ def set_seed(seed: int = 42) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def setup_logging(log_dir: str = "logs", name: str = "training") -> logging.Logger:
+def setup_logging(log_dir: str | None = None, name: str = "training") -> logging.Logger:
     """Configure file and console logging.
 
     Args:
@@ -53,6 +57,8 @@ def setup_logging(log_dir: str = "logs", name: str = "training") -> logging.Logg
         Configured Logger instance.
 
     """
+    log_dir = log_dir or cfg.logging.dir
+
     log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
 
@@ -63,7 +69,7 @@ def setup_logging(log_dir: str = "logs", name: str = "training") -> logging.Logg
     logger.setLevel(logging.INFO)
 
     if not logger.handlers:
-        fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        fmt = logging.Formatter(cfg.logging.format)
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(fmt)
         stream_handler = logging.StreamHandler()

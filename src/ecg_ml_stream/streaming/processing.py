@@ -11,6 +11,7 @@ from pyspark.sql.types import (
     StringType,
 )
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.streaming.udf import create_inference_udf
 from ecg_ml_stream.utils.helpers import setup_logging
 from ecg_ml_stream.utils.mappings import (
@@ -24,11 +25,11 @@ logger = setup_logging(name="streaming")
 
 
 def run_streaming_job(
-    kafka_bootstrap_servers: str = "kafka:9092",
-    input_topic: str = "ecg-pending",
-    output_topic: str = "ecg-diagnoses",
-    model_path: str = "/app/models/ecg_resnet1d.pt",
-    checkpoint_path: str = "/app/checkpoints/ecg-streaming",
+    kafka_bootstrap_servers: str | None = None,
+    input_topic: str | None = None,
+    output_topic: str | None = None,
+    model_path: str | None = None,
+    checkpoint_path: str | None = None,
 ) -> None:
     """Start the ECG Spark Structured Streaming job.
 
@@ -40,6 +41,12 @@ def run_streaming_job(
         checkpoint_path (str): Path for Spark Structured Streaming checkpointing.
 
     """
+    kafka_bootstrap_servers = kafka_bootstrap_servers or cfg.kafka.bootstrap_servers
+    input_topic = input_topic or cfg.kafka.topic_pending
+    output_topic = output_topic or cfg.kafka.topic_diagnoses
+    model_path = model_path or cfg.model.path
+    checkpoint_path = checkpoint_path or cfg.spark.checkpoint_path
+
     logger.info("=" * 60)
     logger.info(
         "ECG-ML-STREAM: Distributed real-time ECG signal processing system with ML capabilities."
@@ -53,14 +60,14 @@ def run_streaming_job(
     logger.info("=" * 60)
 
     spark_builder = (
-        SparkSession.builder.appName("ECG-ML-STREAM")
+        SparkSession.builder.appName(cfg.spark.app_name)
         .config("spark.sql.streaming.checkpointLocation", checkpoint_path)
-        .config("spark.sql.shuffle.partitions", "4")
-        .config("spark.default.parallelism", "4")
-        .config("spark.executor.memory", "2g")
-        .config("spark.executor.cores", "2")
-        .config("spark.driver.memory", "2g")
-        .config("spark.driver.cores", "2")
+        .config("spark.sql.shuffle.partitions", str(cfg.spark.shuffle_partitions))
+        .config("spark.default.parallelism", str(cfg.spark.parallelism))
+        .config("spark.executor.memory", cfg.spark.executor_memory)
+        .config("spark.executor.cores", str(cfg.spark.executor_cores))
+        .config("spark.driver.memory", cfg.spark.driver_memory)
+        .config("spark.driver.cores", str(cfg.spark.driver_cores))
         .config("spark.sql.execution.arrow.pyspark.enabled", "true")
         .config("spark.ui.showConsoleProgress", "false")
     )
@@ -76,7 +83,7 @@ def run_streaming_job(
             .option("subscribe", input_topic)
             .option("startingOffsets", "latest")
             .option("failOnDataLoss", "false")
-            .option("maxOffsetsPerTrigger", "100")
+            .option("maxOffsetsPerTrigger", str(cfg.spark.max_offsets_per_trigger))
             .load()
         )
 
@@ -154,7 +161,7 @@ def run_streaming_job(
             diagnosed_stream.writeStream.foreachBatch(_write_batch)
             .option("checkpointLocation", checkpoint_path)
             .outputMode("append")
-            .trigger(processingTime="1 seconds")
+            .trigger(processingTime=cfg.spark.trigger_interval)
             .start()
         )
 
@@ -169,8 +176,8 @@ def run_streaming_job(
 
 
 def streaming_dry_run(
-    kafka_bootstrap_servers: str = "kafka:9092",
-    input_topic: str = "ecg-pending",
+    kafka_bootstrap_servers: str | None = None,
+    input_topic: str | None = None,
 ) -> None:
     """Run a debug dry-run of the streaming job without inference.
 
@@ -179,7 +186,10 @@ def streaming_dry_run(
         input_topic (str): Kafka topic to read ECG data from.
 
     """
-    spark_builder = SparkSession.builder.appName("ECG-ML-STREAM-DEBUG")
+    kafka_bootstrap_servers = kafka_bootstrap_servers or cfg.kafka.bootstrap_servers
+    input_topic = input_topic or cfg.kafka.topic_pending
+
+    spark_builder = SparkSession.builder.appName(f"{cfg.spark.app_name}-DEBUG")
 
     with spark_builder.getOrCreate() as spark:
         spark.sparkContext.setLogLevel("WARN")
@@ -228,26 +238,31 @@ def parse_args() -> argparse.Namespace:
 
     """
     parser = argparse.ArgumentParser(description="ECG-ML-STREAM Spark Structured Streaming Job")
-    parser.add_argument("--kafka", type=str, default="kafka:9092", help="Kafka broker address.")
     parser.add_argument(
-        "--input-topic", type=str, default="ecg-pending", help="Kafka topic to read ECG data from."
+        "--kafka", type=str, default=cfg.kafka.bootstrap_servers, help="Kafka broker address."
+    )
+    parser.add_argument(
+        "--input-topic",
+        type=str,
+        default=cfg.kafka.topic_pending,
+        help="Kafka topic to read ECG data from.",
     )
     parser.add_argument(
         "--output-topic",
         type=str,
-        default="ecg-diagnoses",
+        default=cfg.kafka.topic_diagnoses,
         help="Kafka topic to write diagnoses to.",
     )
     parser.add_argument(
         "--model-path",
         type=str,
-        default="/app/models/ecg_resnet1d.pt",
+        default=cfg.model.path,
         help="Path to the ECG classification model.",
     )
     parser.add_argument(
         "--checkpoint",
         type=str,
-        default="/app/checkpoints/ecg-streaming",
+        default=cfg.spark.checkpoint_path,
         help="Path for Spark Structured Streaming checkpointing.",
     )
     parser.add_argument(

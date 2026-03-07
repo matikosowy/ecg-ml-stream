@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.streaming.processing import (
     main,
     parse_args,
@@ -44,15 +45,15 @@ class TestParseArgs:
     @pytest.mark.parametrize(
         ("argv", "attr", "expected"),
         [
-            ([], "kafka", "kafka:9092"),
+            ([], "kafka", cfg.kafka.bootstrap_servers),
             (["--kafka", "broker:1234"], "kafka", "broker:1234"),
-            ([], "input_topic", "ecg-pending"),
+            ([], "input_topic", cfg.kafka.topic_pending),
             (["--input-topic", "my-input"], "input_topic", "my-input"),
-            ([], "output_topic", "ecg-diagnoses"),
+            ([], "output_topic", cfg.kafka.topic_diagnoses),
             (["--output-topic", "my-output"], "output_topic", "my-output"),
-            ([], "model_path", "/app/models/ecg_resnet1d.pt"),
+            ([], "model_path", cfg.model.path),
             (["--model-path", "/models/model.pt"], "model_path", "/models/model.pt"),
-            ([], "checkpoint", "/app/checkpoints/ecg-streaming"),
+            ([], "checkpoint", cfg.spark.checkpoint_path),
             (["--checkpoint", "/checkpoints/ckpt"], "checkpoint", "/checkpoints/ckpt"),
             ([], "dry_run", False),
             (["--dry-run"], "dry_run", True),

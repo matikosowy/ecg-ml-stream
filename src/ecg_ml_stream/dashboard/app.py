@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
 from ecg_ml_stream.dashboard.plotting import create_ecg_plot, create_probability_chart
 from ecg_ml_stream.utils.constants import CLASS_COLORS, CLASS_DESCRIPTIONS, ECG_LEAD_NAMES
@@ -38,12 +39,12 @@ def main() -> None:
 
         kafka_servers = st.text_input(
             "Kafka Bootstrap Servers",
-            value=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+            value=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", cfg.kafka.bootstrap_servers),
         )
-        topic = st.text_input("Kafka topic", value="ecg-diagnoses")
+        topic = st.text_input("Kafka topic", value=cfg.kafka.topic_diagnoses)
         auto_refresh = st.checkbox("Auto-refresh", value=True)
-        refresh_interval = st.slider("Refresh interval (s)", 1, 10, 2)
-        max_records = st.slider("Max records", 10, 100, 50)
+        refresh_interval = st.slider("Refresh interval (s)", 1, 10, cfg.dashboard.refresh_interval)
+        max_records = st.slider("Max records", 10, 100, cfg.dashboard.max_records)
 
         st.markdown("---")
         st.header("Filtrowanie")
@@ -72,7 +73,7 @@ def main() -> None:
             consumer = get_kafka_consumer(
                 bootstrap_servers=kafka_servers,
                 topic=topic,
-                group_id="dashboard-consumer",
+                group_id=cfg.kafka.consumer_group,
             )
             if consumer:
                 for message in consumer:
@@ -171,16 +172,16 @@ def main() -> None:
             diag_class = selected["diagnosis_class"]
             diag_prob = selected["diagnosis_probability"] * 100
 
+            desc = CLASS_DESCRIPTIONS.get(diag_class, "")
+            translated = CLASS_TRANSLATIONS.get(desc, desc)
+            diagnosis_text = (
+                f"**Diagnoza: {diag_class}** ({diag_prob:.1f}%). \n{translated}"
+            )
+
             if is_dangerous:
-                st.error(
-                    f"**Diagnoza: {diag_class}** ({diag_prob:.1f}%). \n"
-                    f"{CLASS_TRANSLATIONS.get(CLASS_DESCRIPTIONS.get(diag_class, ''), CLASS_DESCRIPTIONS.get(diag_class, ''))}"
-                )
+                st.error(diagnosis_text)
             else:
-                st.success(
-                    f"**Diagnoza: {diag_class}** ({diag_prob:.1f}%). \n"
-                    f"{CLASS_TRANSLATIONS.get(CLASS_DESCRIPTIONS.get(diag_class, ''), CLASS_DESCRIPTIONS.get(diag_class, ''))}"
-                )
+                st.success(diagnosis_text)
 
             if selected.get("ground_truth"):
                 correct = selected["ground_truth"] == diag_class
@@ -199,7 +200,7 @@ def main() -> None:
                 lead_options = st.multiselect(
                     "Wybierz sondy",
                     options=list(range(12)),
-                    default=[0, 1, 6, 7, 8],
+                    default=cfg.dashboard.default_leads,
                     format_func=lambda x: ECG_LEAD_NAMES[x],
                 )
 

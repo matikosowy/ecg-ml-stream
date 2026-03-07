@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F  # noqa: N812 - import as F is a common PyTorch convention
 from torch import nn
 
+from ecg_ml_stream.config import cfg
 from ecg_ml_stream.utils.constants import (
     CLASS_DESCRIPTIONS,
     CLASS_NAMES,
@@ -295,10 +296,10 @@ class ECGClassifier:
         self.model = ResNet1D(
             input_channels=NUM_LEADS,
             num_classes=NUM_CLASSES,
-            base_filters=64,
-            kernel_size=7,
-            num_blocks=[2, 2, 2, 2],
-            dropout=0.2,
+            base_filters=cfg.model.base_filters,
+            kernel_size=cfg.model.kernel_size,
+            num_blocks=cfg.model.num_blocks,
+            dropout=cfg.model.dropout,
         ).to(self.device)
 
         if model_path:
@@ -439,10 +440,10 @@ def create_model(
     model = ResNet1D(
         input_channels=input_channels,
         num_classes=num_classes,
-        base_filters=64,
-        kernel_size=7,
-        num_blocks=[2, 2, 2, 2],
-        dropout=0.2,
+        base_filters=cfg.model.base_filters,
+        kernel_size=cfg.model.kernel_size,
+        num_blocks=cfg.model.num_blocks,
+        dropout=cfg.model.dropout,
     )
 
     if pretrained_path:
