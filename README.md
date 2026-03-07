@@ -27,7 +27,7 @@ pip install .
 
 ---
 
-### Start the Spark Streaming stack
+### Build and start the application stack
 ```
 docker compose -f docker/docker-compose.yml up -d --build
 ```

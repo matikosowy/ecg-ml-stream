@@ -15,6 +15,7 @@ from streamlit_autorefresh import st_autorefresh
 from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
 from ecg_ml_stream.dashboard.plotting import create_ecg_plot, create_probability_chart
 from ecg_ml_stream.utils.constants import CLASS_COLORS, CLASS_DESCRIPTIONS, ECG_LEAD_NAMES
+from ecg_ml_stream.utils.mappings import CLASS_TRANSLATIONS
 
 st.set_page_config(
     page_title="Monitoring EKG",
@@ -150,8 +151,8 @@ def main() -> None:
 
             with col_info1:
                 st.markdown(
-                    f"***ID:** `{selected['exam_id'][:16]}...`  \n"
-                    f"***Szpital:** {selected['hospital_name']}  \n"
+                    f"**ID:** `{selected['exam_id'][:16]}...`  \n"
+                    f"**Szpital:** {selected['hospital_name']}  \n"
                     f"**Miasto:** {selected['hospital_city']}  \n"
                     f"**Czas przetwarzania:** {selected['processing_time_ms']:.0f} ms"
                 )
@@ -173,12 +174,12 @@ def main() -> None:
             if is_dangerous:
                 st.error(
                     f"**Diagnoza: {diag_class}** ({diag_prob:.1f}%). \n"
-                    f"{CLASS_DESCRIPTIONS.get(diag_class, '')}"
+                    f"{CLASS_TRANSLATIONS.get(CLASS_DESCRIPTIONS.get(diag_class, ''), CLASS_DESCRIPTIONS.get(diag_class, ''))}"
                 )
             else:
                 st.success(
                     f"**Diagnoza: {diag_class}** ({diag_prob:.1f}%). \n"
-                    f"{CLASS_DESCRIPTIONS.get(diag_class, '')}"
+                    f"{CLASS_TRANSLATIONS.get(CLASS_DESCRIPTIONS.get(diag_class, ''), CLASS_DESCRIPTIONS.get(diag_class, ''))}"
                 )
 
             if selected.get("ground_truth"):
