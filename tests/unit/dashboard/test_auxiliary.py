@@ -7,6 +7,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+import streamlit as st
 from kafka.errors import KafkaError
 
 from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
@@ -15,6 +16,11 @@ _AUXILIARY = "ecg_ml_stream.dashboard.auxiliary"
 
 
 class TestGetKafkaConsumer:
+    @pytest.fixture(autouse=True)
+    def _clear_session_group_id(self):
+        """Ensure each test gets a fresh session group ID."""
+        st.session_state.pop("_kafka_group_id", None)
+
     def test_returns_consumer_on_success(self):
         mock_consumer = MagicMock()
         with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock_consumer):
@@ -31,10 +37,11 @@ class TestGetKafkaConsumer:
             get_kafka_consumer("broker:9092", "topic", "group-1")
         assert mock_cls.call_args[1]["bootstrap_servers"] == "broker:9092"
 
-    def test_passes_group_id(self):
+    def test_passes_group_id_with_base_prefix(self):
         with patch(f"{_AUXILIARY}.KafkaConsumer") as mock_cls:
             get_kafka_consumer("localhost:9092", "topic", "my-group")
-        assert mock_cls.call_args[1]["group_id"] == "my-group"
+        group_id = mock_cls.call_args[1]["group_id"]
+        assert group_id.startswith("my-group-")
 
     def test_kafka_error_returns_none(self):
         with (

@@ -48,6 +48,15 @@ docker compose -f docker/docker-compose.yml down
 
 ---
 
+### Configuration
+1. `ecg_ml_stream/config/config.toml` - Main and global configuration file. Contains default values for all services. Can be overridden by environment variables or command line arguments.
+
+2. Environment variables - `ECG_{MODULE}_{KEY}`-like environment variables can be used to override specific configuration values. For example, `ECG_DATA_SAMPLING_RATE=500` will set the `sampling_rate` key in the `data` module to `500`.
+
+3. Command line arguments - Some services (like producer and training) support command line arguments that can override configuration values. For example, `--data-path data/some-directory` will set the `data_path` key in the `training` module to `data/some-directory` for the training.
+
+---
+
 ### Run producer
 ```
 python -m ecg_ml_stream.producer.ecg_producer \

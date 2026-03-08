@@ -4,12 +4,33 @@ Copyright 2026 Mateusz Golebiewski
 """
 
 import json
+import uuid
 
 import streamlit as st
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
 from ecg_ml_stream.config import cfg
+
+
+def _session_group_id(base: str) -> str:
+    """Return a consumer group ID unique to the current Streamlit session.
+
+    Uses ``st.session_state`` to persist the generated ID across reruns
+    within the same browser session, while producing a fresh ID on page
+    refresh (new session).
+
+    Args:
+        base: Base prefix for the group ID.
+
+    Returns:
+        A string like `dashboard-consumer-<uuid4_hex[:8]>`.
+
+    """
+    key = "_kafka_group_id"
+    if key not in st.session_state:
+        st.session_state[key] = f"{base}-{uuid.uuid4().hex[:8]}"
+    return st.session_state[key]
 
 
 def get_kafka_consumer(
@@ -19,10 +40,14 @@ def get_kafka_consumer(
 ) -> KafkaConsumer | None:
     """Create a Kafka consumer for the specified topic.
 
+    On the first run of a new Streamlit session the consumer reads from
+    the earliest available offset so that historical messages are loaded.
+    Within the same session subsequent polls only fetch new messages.
+
     Args:
         bootstrap_servers (str): Comma-separated list of Kafka bootstrap servers.
         topic (str): Kafka topic to subscribe to.
-        group_id (str): Optional. Kafka consumer group ID.
+        group_id (str): Base Kafka consumer group ID (suffixed per session).
 
     Returns:
         KafkaConsumer | None: A KafkaConsumer instance if successful, or None if an error occurs.
@@ -33,9 +58,9 @@ def get_kafka_consumer(
             topic,
             bootstrap_servers=bootstrap_servers,
             value_deserializer=lambda x: json.loads(x.decode("utf-8")),
-            auto_offset_reset="latest",
+            auto_offset_reset="earliest",
             enable_auto_commit=True,
-            group_id=group_id,
+            group_id=_session_group_id(group_id),
             consumer_timeout_ms=cfg.kafka.consumer_timeout_ms,
         )
     except KafkaError as e:

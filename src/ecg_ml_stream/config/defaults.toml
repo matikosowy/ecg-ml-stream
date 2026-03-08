@@ -45,8 +45,8 @@ max_offsets_per_trigger = 100
 
 [dashboard]
 port = 8501
-refresh_interval = 2
-max_records = 50
+refresh_interval = 5
+max_records = 20
 default_leads = [0, 1, 6, 7, 8]
 
 [producer]

@@ -14,8 +14,19 @@ from streamlit_autorefresh import st_autorefresh
 
 from ecg_ml_stream.config import cfg
 from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
-from ecg_ml_stream.dashboard.plotting import create_ecg_plot, create_probability_chart
-from ecg_ml_stream.utils.constants import CLASS_COLORS, CLASS_DESCRIPTIONS, ECG_LEAD_NAMES
+from ecg_ml_stream.dashboard.plotting import (
+    create_centroid_chart,
+    create_deviation_timeline,
+    create_ecg_plot,
+    create_probability_chart,
+)
+from ecg_ml_stream.dashboard.trend import TrendTracker
+from ecg_ml_stream.utils.constants import (
+    CLASS_COLORS,
+    CLASS_DESCRIPTIONS,
+    CLASS_NAMES,
+    ECG_LEAD_NAMES,
+)
 from ecg_ml_stream.utils.mappings import CLASS_TRANSLATIONS
 
 st.set_page_config(
@@ -67,6 +78,9 @@ def main() -> None:
     if "selected_exam" not in st.session_state:
         st.session_state.selected_exam = None
 
+    if "trend_tracker" not in st.session_state:
+        st.session_state.trend_tracker = TrendTracker(CLASS_NAMES)
+
     # Pull new messages from Kafka
     if auto_refresh:
         try:
@@ -79,6 +93,8 @@ def main() -> None:
                 for message in consumer:
                     parsed = parse_diagnosis_message(message.value)
                     if parsed:
+                        deviation = st.session_state.trend_tracker.update(parsed)
+                        parsed["deviation_score"] = deviation
                         st.session_state.diagnoses.appendleft(parsed)
                         st.session_state.last_update = datetime.now()  # noqa: DTZ005 - No timezone needed
                 consumer.close()
@@ -183,6 +199,11 @@ def main() -> None:
             else:
                 st.success(diagnosis_text)
 
+            if selected.get("deviation_score") is not None:
+                st.markdown(
+                    f"**Odchylenie od trendu klasy:** {selected['deviation_score']:.4f}"
+                )
+
             if selected.get("ground_truth"):
                 correct = selected["ground_truth"] == diag_class
                 icon = "✅" if correct else "❌"
@@ -264,6 +285,46 @@ def main() -> None:
                 if total_with_gt > 0:
                     accuracy = correct / total_with_gt * 100
                     st.markdown(f"- **{accuracy:.1f}%** ({correct}/{total_with_gt})")
+
+    # Trend analysis
+    st.markdown("---")
+    st.subheader("Analiza trendu")
+
+    tracker = st.session_state.trend_tracker
+    centroids = {
+        c: tracker.get_centroid(c)
+        for c in CLASS_NAMES
+        if tracker.get_centroid(c) is not None
+    }
+
+    if centroids:
+        col_trend1, col_trend2 = st.columns(2)
+
+        with col_trend1:
+            st.plotly_chart(
+                create_centroid_chart(centroids),
+                use_container_width=True,
+            )
+
+        with col_trend2:
+            history = tracker.get_deviation_history()
+            if history:
+                st.plotly_chart(
+                    create_deviation_timeline(history, CLASS_NAMES),
+                    use_container_width=True,
+                )
+            else:
+                st.info("Zbyt mało danych dla wykresu odchyleń.")
+
+        stats = tracker.get_class_stats()
+        st.markdown("**Statystyki dla klas:**")
+        stat_cols = st.columns(len(CLASS_NAMES))
+        for col, cls in zip(stat_cols, CLASS_NAMES, strict=True):
+            with col:
+                count = stats[cls]["count"]
+                st.markdown(f"**{cls}**  \nPróbek: {count}")
+    else:
+        st.info("Brak danych do analizy trendu...")
 
     if auto_refresh:
         st_autorefresh(interval=refresh_interval * 1000, key="ecg_autorefresh")

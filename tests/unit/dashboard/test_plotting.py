@@ -7,8 +7,13 @@ import numpy as np
 import plotly.graph_objects as go
 import pytest
 
-from ecg_ml_stream.dashboard.plotting import create_ecg_plot, create_probability_chart
-from ecg_ml_stream.utils.constants import CLASS_COLORS, ECG_LEAD_NAMES
+from ecg_ml_stream.dashboard.plotting import (
+    create_centroid_chart,
+    create_deviation_timeline,
+    create_ecg_plot,
+    create_probability_chart,
+)
+from ecg_ml_stream.utils.constants import CLASS_COLORS, CLASS_NAMES, ECG_LEAD_NAMES
 
 
 class TestCreateEcgPlot:
@@ -101,3 +106,80 @@ class TestCreateProbabilityChart:
     def test_all_class_colors(self, class_name, expected_color):
         fig = create_probability_chart({class_name: 1.0})
         assert fig.data[0].marker.color[0] == expected_color
+
+
+class TestCreateCentroidChart:
+    @staticmethod
+    def _make_centroid(n_leads: int = 12) -> np.ndarray:
+        """Create a fake centroid array with n_leads * 2 features."""
+        return np.arange(n_leads * 2, dtype=np.float64) * 0.1
+
+    def test_returns_figure(self):
+        centroids = {"NORM": self._make_centroid()}
+        fig = create_centroid_chart(centroids)
+        assert isinstance(fig, go.Figure)
+
+    def test_trace_count_matches_classes_with_data(self):
+        centroids = {
+            "NORM": self._make_centroid(),
+            "MI": self._make_centroid(),
+        }
+        fig = create_centroid_chart(centroids)
+        assert len(fig.data) == 2
+
+    def test_empty_centroids_produces_empty_figure(self):
+        fig = create_centroid_chart({})
+        assert len(fig.data) == 0
+
+    def test_y_values_are_mean_amplitudes(self):
+        centroid = self._make_centroid()
+        centroids = {"NORM": centroid}
+        fig = create_centroid_chart(centroids, n_leads=12)
+        expected = [centroid[i * 2] for i in range(12)]
+        assert list(fig.data[0].y) == pytest.approx(expected)
+
+    def test_bar_colors_match_class_colors(self):
+        centroids = {"MI": self._make_centroid()}
+        fig = create_centroid_chart(centroids)
+        assert fig.data[0].marker.color == CLASS_COLORS["MI"]
+
+    def test_x_labels_are_lead_names(self):
+        centroids = {"NORM": self._make_centroid()}
+        fig = create_centroid_chart(centroids, n_leads=12)
+        assert list(fig.data[0].x) == ECG_LEAD_NAMES[:12]
+
+
+class TestCreateDeviationTimeline:
+    def test_returns_figure(self):
+        fig = create_deviation_timeline([], CLASS_NAMES)
+        assert isinstance(fig, go.Figure)
+
+    def test_empty_history_has_no_traces(self):
+        fig = create_deviation_timeline([], CLASS_NAMES)
+        assert len(fig.data) == 0
+
+    def test_traces_match_classes_in_history(self):
+        history = [
+            {"timestamp": "2026-01-01T00:00:00", "deviation": 0.1,
+             "exam_id": "e1", "class_name": "NORM"},
+            {"timestamp": "2026-01-01T00:00:01", "deviation": 0.2,
+             "exam_id": "e2", "class_name": "MI"},
+        ]
+        fig = create_deviation_timeline(history, CLASS_NAMES)
+        assert len(fig.data) == 2
+
+    def test_marker_color_matches_class(self):
+        history = [
+            {"timestamp": "2026-01-01T00:00:00", "deviation": 0.1,
+             "exam_id": "e1", "class_name": "NORM"},
+        ]
+        fig = create_deviation_timeline(history, CLASS_NAMES)
+        assert fig.data[0].marker.color == CLASS_COLORS["NORM"]
+
+    def test_scatter_y_values_are_deviations(self):
+        history = [
+            {"timestamp": "t1", "deviation": 0.15, "exam_id": "e1", "class_name": "NORM"},
+            {"timestamp": "t2", "deviation": 0.25, "exam_id": "e2", "class_name": "NORM"},
+        ]
+        fig = create_deviation_timeline(history, CLASS_NAMES)
+        assert list(fig.data[0].y) == [0.15, 0.25]
