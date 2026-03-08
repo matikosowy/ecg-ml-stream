@@ -90,13 +90,17 @@ def main() -> None:
                 group_id=cfg.kafka.consumer_group,
             )
             if consumer:
+                count = 0
                 for message in consumer:
                     parsed = parse_diagnosis_message(message.value)
                     if parsed:
                         deviation = st.session_state.trend_tracker.update(parsed)
                         parsed["deviation_score"] = deviation
                         st.session_state.diagnoses.appendleft(parsed)
-                        st.session_state.last_update = datetime.now()  # noqa: DTZ005 - No timezone needed
+                        count += 1
+                    if count >= max_records:
+                        break
+                st.session_state.last_update = datetime.now()  # noqa: DTZ005
                 consumer.close()
         except Exception as e:  # noqa: BLE001 - Catch all exceptions for connection errors
             st.warning(f"Cannot connect to Kafka: {e}")

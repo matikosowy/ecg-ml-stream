@@ -43,6 +43,11 @@ class TestGetKafkaConsumer:
         group_id = mock_cls.call_args[1]["group_id"]
         assert group_id.startswith("my-group-")
 
+    def test_auto_offset_reset_is_earliest(self):
+        with patch(f"{_AUXILIARY}.KafkaConsumer") as mock_cls:
+            get_kafka_consumer("localhost:9092", "topic", "group-1")
+        assert mock_cls.call_args[1]["auto_offset_reset"] == "earliest"
+
     def test_kafka_error_returns_none(self):
         with (
             patch(f"{_AUXILIARY}.KafkaConsumer", side_effect=KafkaError),

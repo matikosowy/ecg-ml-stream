@@ -16,15 +16,16 @@ from ecg_ml_stream.config import cfg
 def _session_group_id(base: str) -> str:
     """Return a consumer group ID unique to the current Streamlit session.
 
-    Uses ``st.session_state`` to persist the generated ID across reruns
-    within the same browser session, while producing a fresh ID on page
-    refresh (new session).
+    A fresh ID is generated on every new session (page refresh), so the
+    consumer re-reads the topic from the earliest offset.  Within a
+    session the ID stays the same, so auto-refresh only fetches new
+    messages.
 
     Args:
-        base: Base prefix for the group ID.
+        base (str): Base prefix for the group ID.
 
     Returns:
-        A string like `dashboard-consumer-<uuid4_hex[:8]>`.
+        str: A string like `dashboard-consumer-<uuid4_hex[:8]>`.
 
     """
     key = "_kafka_group_id"
@@ -40,9 +41,10 @@ def get_kafka_consumer(
 ) -> KafkaConsumer | None:
     """Create a Kafka consumer for the specified topic.
 
-    On the first run of a new Streamlit session the consumer reads from
-    the earliest available offset so that historical messages are loaded.
-    Within the same session subsequent polls only fetch new messages.
+    On page refresh a new session-scoped group ID is generated, causing
+    the consumer to read from `earliest`.  On subsequent auto-refresh
+    cycles within the same session the committed offsets are reused, so
+    only new messages are fetched.
 
     Args:
         bootstrap_servers (str): Comma-separated list of Kafka bootstrap servers.
