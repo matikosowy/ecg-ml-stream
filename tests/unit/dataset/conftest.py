@@ -20,7 +20,8 @@ def _make_metadata(total: int = 12) -> pd.DataFrame:
     ]
     scp_codes = base_codes + edge_codes
 
-    folds = [1] * (total - 4) + [1, 1, 9, 10]  # valid folds + edge cases (9 and 10 are not in 1-5)
+    # Folds 1-8 train, 9 val, 10 test; last two are edge cases on fold 1
+    folds = [1] * (total - 4) + [9, 10, 1, 1]
     return pd.DataFrame(
         {
             "scp_codes": scp_codes,

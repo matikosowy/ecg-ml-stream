@@ -31,14 +31,9 @@ class TestGetModel:
         mock_cls.assert_called_once_with(model_path=str(model_file))
         assert result is mock_instance
 
-    def test_uses_random_weights_when_path_missing(self):
-        mock_instance = MagicMock()
-
-        with patch(_ECG_CLASSIFIER, return_value=mock_instance) as mock_cls:
-            result = get_model("/nonexistent/model.pt")
-
-        mock_cls.assert_called_once_with()
-        assert result is mock_instance
+    def test_raises_when_model_path_missing(self):
+        with pytest.raises(FileNotFoundError, match="Model not found"):
+            get_model("/nonexistent/model.pt")
 
     def test_caches_instance_on_same_path(self, tmp_path):
         model_file = tmp_path / "model.pt"

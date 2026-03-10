@@ -184,7 +184,8 @@ class ECGProducer:
                     self.stats["errors"] += 1
                 logger.exception("[Thread %s] Unexpected error", thread_id)
 
-            time.sleep(max(0.1, self.interval_sec + random.uniform(-0.5, 0.5)))
+            jitter = random.uniform(-self.interval_sec * 0.25, self.interval_sec * 0.25)
+            time.sleep(max(0.1, self.interval_sec + jitter))
 
         logger.info("[Thread %s] Stopped", thread_id)
 
@@ -216,6 +217,7 @@ class ECGProducer:
                 self.running = False
 
         self._print_stats()
+        self.producer.flush(timeout=30)
         self.producer.close()
         logger.info("ECG Producer stopped.")
 

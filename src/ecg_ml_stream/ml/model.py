@@ -361,8 +361,19 @@ class ECGClassifier:
             dict: Dictionary with keys: `class`, `class_idx`, `probability`,
             `all_probabilities`, `is_dangerous`, `description`, `window_predictions`.
 
+        Raises:
+            ValueError: If `windows` does not have the expected shape.
+
         """
         self.model.eval()
+
+        if windows.ndim != 3 or windows.shape[1] != NUM_LEADS:
+            msg = (
+                f"Expected tensor of shape (N, {NUM_LEADS}, seq_len), "
+                f"got {tuple(windows.shape)}"
+            )
+            raise ValueError(msg)
+
         windows = windows.to(self.device)
 
         logits = self.model(windows)

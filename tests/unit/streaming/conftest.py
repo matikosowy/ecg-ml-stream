@@ -34,6 +34,7 @@ def mock_df(mock_query: MagicMock) -> MagicMock:
     df.withColumn.return_value = df
     df.withColumnRenamed.return_value = df
     df.select.return_value = df
+    df.filter.return_value = df
     df.writeStream = write_chain
 
     return df
