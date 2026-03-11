@@ -31,14 +31,9 @@ class TestGetModel:
         mock_cls.assert_called_once_with(model_path=str(model_file))
         assert result is mock_instance
 
-    def test_uses_random_weights_when_path_missing(self):
-        mock_instance = MagicMock()
-
-        with patch(_ECG_CLASSIFIER, return_value=mock_instance) as mock_cls:
-            result = get_model("/nonexistent/model.pt")
-
-        mock_cls.assert_called_once_with()
-        assert result is mock_instance
+    def test_raises_when_model_path_missing(self):
+        with pytest.raises(FileNotFoundError, match="Model not found"):
+            get_model("/nonexistent/model.pt")
 
     def test_caches_instance_on_same_path(self, tmp_path):
         model_file = tmp_path / "model.pt"
@@ -143,3 +138,15 @@ class TestInferEcgRecord:
             infer_ecg_record(_make_signal(1000), sampling_rate=100, model_path=custom_path)
 
         mock_get.assert_called_once_with(custom_path)
+
+    def test_raises_on_wrong_channel_count(self):
+        wrong_channels = [[0.1] * 1000] * 5  # 5 instead of 12
+        with pytest.raises(ValueError, match="Expected 12 channels"):
+            infer_ecg_record(wrong_channels, sampling_rate=100)
+
+    def test_returns_empty_diagnosis_for_short_signal(self):
+        short_signal = [[0.1] * 50] * 12  # 50 samples < window_size=250
+        result = infer_ecg_record(short_signal, sampling_rate=100)
+        assert result["class"] == "NORM"
+        assert result["window_predictions"] == []
+        assert result["probability"] == 0.0

@@ -220,6 +220,7 @@ runs/
 
 # Todo
 todo
+docs/
 
 # VS Code
 .vscode/settings.json

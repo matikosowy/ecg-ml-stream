@@ -106,7 +106,7 @@ def run_streaming_job(
 
         parsed_stream = parsed_stream.select(
             *[F.col(src).alias(dst) for src, dst in PARSED_STREAM_RENAME.items()]
-        )
+        ).filter(F.col("signal_data").isNotNull())
 
         inference_udf = create_inference_udf(model_path)
         diagnosed_stream = parsed_stream.withColumn(

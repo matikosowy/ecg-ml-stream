@@ -7,34 +7,167 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+import streamlit as st
+from kafka import TopicPartition
 from kafka.errors import KafkaError
 
-from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
+from ecg_ml_stream.dashboard.auxiliary import (
+    get_kafka_consumer,
+    get_topic_message_count,
+    parse_diagnosis_message,
+)
 
 _AUXILIARY = "ecg_ml_stream.dashboard.auxiliary"
 
 
-class TestGetKafkaConsumer:
-    def test_returns_consumer_on_success(self):
-        mock_consumer = MagicMock()
-        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock_consumer):
-            result = get_kafka_consumer("localhost:9092", "test-topic", "group-1")
-        assert result is mock_consumer
+def _mock_consumer(topic="topic", partitions=None, committed_offset=None):
+    """Create a mock KafkaConsumer with partition and offset stubs."""
+    if partitions is None:
+        partitions = {0}
+    mock = MagicMock()
+    mock.partitions_for_topic.return_value = partitions
 
-    def test_passes_topic_as_first_arg(self):
-        with patch(f"{_AUXILIARY}.KafkaConsumer") as mock_cls:
-            get_kafka_consumer("localhost:9092", "ecg-pending", "group-1")
-        assert mock_cls.call_args[0][0] == "ecg-pending"
+    tps = [TopicPartition(topic, p) for p in sorted(partitions)]
+    mock.committed.return_value = committed_offset
+    mock.end_offsets.return_value = dict.fromkeys(tps, 200)
+    mock.beginning_offsets.return_value = dict.fromkeys(tps, 0)
+    return mock
+
+
+class TestGetTopicMessageCount:
+    def test_returns_total_count_single_partition(self):
+        mock = MagicMock()
+        mock.partitions_for_topic.return_value = {0}
+        tp = TopicPartition("t", 0)
+        mock.end_offsets.return_value = {tp: 50}
+        mock.beginning_offsets.return_value = {tp: 0}
+
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            assert get_topic_message_count("localhost:9092", "t") == 50
+
+    def test_sums_across_partitions(self):
+        mock = MagicMock()
+        mock.partitions_for_topic.return_value = {0, 1}
+        tp0, tp1 = TopicPartition("t", 0), TopicPartition("t", 1)
+        mock.end_offsets.return_value = {tp0: 100, tp1: 50}
+        mock.beginning_offsets.return_value = {tp0: 10, tp1: 0}
+
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            assert get_topic_message_count("localhost:9092", "t") == 140
+
+    def test_accounts_for_beginning_offset(self):
+        mock = MagicMock()
+        mock.partitions_for_topic.return_value = {0}
+        tp = TopicPartition("t", 0)
+        mock.end_offsets.return_value = {tp: 80}
+        mock.beginning_offsets.return_value = {tp: 30}
+
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            assert get_topic_message_count("localhost:9092", "t") == 50
+
+    def test_returns_zero_when_no_partitions(self):
+        mock = MagicMock()
+        mock.partitions_for_topic.return_value = set()
+
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            assert get_topic_message_count("localhost:9092", "t") == 0
+
+    def test_returns_zero_when_partitions_none(self):
+        mock = MagicMock()
+        mock.partitions_for_topic.return_value = None
+
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            assert get_topic_message_count("localhost:9092", "t") == 0
+
+    def test_closes_consumer(self):
+        mock = MagicMock()
+        mock.partitions_for_topic.return_value = {0}
+        tp = TopicPartition("t", 0)
+        mock.end_offsets.return_value = {tp: 10}
+        mock.beginning_offsets.return_value = {tp: 0}
+
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            get_topic_message_count("localhost:9092", "t")
+        mock.close.assert_called_once()
+
+    def test_returns_none_on_kafka_error(self):
+        with patch(f"{_AUXILIARY}.KafkaConsumer", side_effect=KafkaError):
+            assert get_topic_message_count("localhost:9092", "t") is None
+
+
+class TestGetKafkaConsumer:
+    @pytest.fixture(autouse=True)
+    def _clear_session_group_id(self):
+        """Ensure each test gets a fresh session group ID."""
+        st.session_state.pop("_kafka_group_id", None)
+
+    def test_returns_consumer_on_success(self):
+        mock = _mock_consumer(committed_offset=50)
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            result = get_kafka_consumer("localhost:9092", "topic", "group-1")
+        assert result is mock
 
     def test_passes_bootstrap_servers(self):
-        with patch(f"{_AUXILIARY}.KafkaConsumer") as mock_cls:
+        mock = _mock_consumer(committed_offset=50)
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock) as mock_cls:
             get_kafka_consumer("broker:9092", "topic", "group-1")
         assert mock_cls.call_args[1]["bootstrap_servers"] == "broker:9092"
 
-    def test_passes_group_id(self):
-        with patch(f"{_AUXILIARY}.KafkaConsumer") as mock_cls:
+    def test_passes_group_id_with_base_prefix(self):
+        mock = _mock_consumer(committed_offset=50)
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock) as mock_cls:
             get_kafka_consumer("localhost:9092", "topic", "my-group")
-        assert mock_cls.call_args[1]["group_id"] == "my-group"
+        group_id = mock_cls.call_args[1]["group_id"]
+        assert group_id.startswith("my-group-")
+
+    def test_auto_offset_reset_is_latest(self):
+        mock = _mock_consumer(committed_offset=50)
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock) as mock_cls:
+            get_kafka_consumer("localhost:9092", "topic", "group-1")
+        assert mock_cls.call_args[1]["auto_offset_reset"] == "latest"
+
+    def test_assigns_partitions(self):
+        mock = _mock_consumer(topic="ecg-diag", committed_offset=50)
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            get_kafka_consumer("localhost:9092", "ecg-diag", "group-1")
+        mock.assign.assert_called_once()
+        assigned = mock.assign.call_args[0][0]
+        assert all(isinstance(tp, TopicPartition) for tp in assigned)
+
+    def test_seeks_on_new_session(self):
+        mock = _mock_consumer(committed_offset=None)
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            get_kafka_consumer("localhost:9092", "topic", "g")
+        mock.seek.assert_called_once()
+        target = mock.seek.call_args[0][1]
+        assert target == 0  # seek to beginning offset
+
+    def test_seeks_to_beginning_offset(self):
+        mock = MagicMock()
+        mock.partitions_for_topic.return_value = {0}
+        tp = TopicPartition("topic", 0)
+        mock.committed.return_value = None
+        mock.end_offsets.return_value = {tp: 30}
+        mock.beginning_offsets.return_value = {tp: 20}
+
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            get_kafka_consumer("localhost:9092", "topic", "g")
+        target = mock.seek.call_args[0][1]
+        assert target == 20  # always seek to beginning_offsets value
+
+    def test_no_seek_when_offsets_committed(self):
+        mock = _mock_consumer(committed_offset=180)
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            get_kafka_consumer("localhost:9092", "topic", "group-1")
+        mock.seek.assert_not_called()
+
+    def test_returns_none_when_no_partitions(self):
+        mock = MagicMock()
+        mock.partitions_for_topic.return_value = set()
+        with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
+            result = get_kafka_consumer("localhost:9092", "topic", "group-1")
+        assert result is None
+        mock.close.assert_called_once()
 
     def test_kafka_error_returns_none(self):
         with (

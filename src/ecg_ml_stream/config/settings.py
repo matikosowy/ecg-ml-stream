@@ -69,6 +69,7 @@ class DashboardConfig:
     port: int
     refresh_interval: int
     max_records: int
+    max_stored: int
     default_leads: list[int]
 
 

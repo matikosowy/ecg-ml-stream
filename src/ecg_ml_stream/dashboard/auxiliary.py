@@ -4,12 +4,68 @@ Copyright 2026 Mateusz Golebiewski
 """
 
 import json
+import logging
+import uuid
 
 import streamlit as st
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, TopicPartition
 from kafka.errors import KafkaError
 
 from ecg_ml_stream.config import cfg
+
+logger = logging.getLogger(__name__)
+
+
+def _session_group_id(base: str) -> str:
+    """Return a consumer group ID unique to the current Streamlit session.
+
+    A fresh ID is generated on every new session (page refresh), so the
+    consumer starts without committed offsets and seeks to recent messages.
+    Within a session the ID stays the same, so auto-refresh only fetches
+    new messages via committed offsets.
+
+    Args:
+        base (str): Base prefix for the group ID.
+
+    Returns:
+        str: A string like ``dashboard-consumer-<uuid4_hex[:8]>``.
+
+    """
+    key = "_kafka_group_id"
+    if key not in st.session_state:
+        st.session_state[key] = f"{base}-{uuid.uuid4().hex[:8]}"
+    return st.session_state[key]
+
+
+def get_topic_message_count(bootstrap_servers: str, topic: str) -> int | None:
+    """Return the total number of messages in a Kafka topic.
+
+    Uses beginning/end offset metadata — no messages are consumed.
+    Returns ``None`` on any connection or metadata error so callers can
+    distinguish "0 messages" from "Kafka unreachable".
+
+    Args:
+        bootstrap_servers (str): Comma-separated list of Kafka bootstrap servers.
+        topic (str): Kafka topic name.
+
+    Returns:
+        int | None: Total message count across all partitions, or None on error.
+
+    """
+    try:
+        consumer = KafkaConsumer(bootstrap_servers=bootstrap_servers)
+        partitions = consumer.partitions_for_topic(topic)
+        if not partitions:
+            consumer.close()
+            return 0
+        tps = [TopicPartition(topic, p) for p in partitions]
+        end = consumer.end_offsets(tps)
+        begin = consumer.beginning_offsets(tps)
+        consumer.close()
+        return sum(end[tp] - begin[tp] for tp in tps)
+    except KafkaError:
+        logger.debug("Cannot query topic offsets for %s", topic)
+        return None
 
 
 def get_kafka_consumer(
@@ -17,30 +73,50 @@ def get_kafka_consumer(
     topic: str,
     group_id: str,
 ) -> KafkaConsumer | None:
-    """Create a Kafka consumer for the specified topic.
+    """Create a Kafka consumer positioned to read all topic messages.
+
+    On a new session (no committed offsets) the consumer seeks to the
+    beginning of each partition so that the TrendTracker processes the full
+    topic history.  On subsequent auto-refresh cycles the committed offsets
+    are reused so only new messages are fetched.
 
     Args:
         bootstrap_servers (str): Comma-separated list of Kafka bootstrap servers.
         topic (str): Kafka topic to subscribe to.
-        group_id (str): Optional. Kafka consumer group ID.
+        group_id (str): Base Kafka consumer group ID (suffixed per session).
 
     Returns:
-        KafkaConsumer | None: A KafkaConsumer instance if successful, or None if an error occurs.
+        KafkaConsumer | None: A KafkaConsumer instance if successful, or None.
 
     """
     try:
-        return KafkaConsumer(
-            topic,
+        consumer = KafkaConsumer(
             bootstrap_servers=bootstrap_servers,
             value_deserializer=lambda x: json.loads(x.decode("utf-8")),
             auto_offset_reset="latest",
             enable_auto_commit=True,
-            group_id=group_id,
+            group_id=_session_group_id(group_id),
             consumer_timeout_ms=cfg.kafka.consumer_timeout_ms,
         )
+
+        partitions = consumer.partitions_for_topic(topic)
+        if not partitions:
+            consumer.close()
+            return None
+
+        tps = [TopicPartition(topic, p) for p in partitions]
+        consumer.assign(tps)
+
+        # New session: no committed offsets — replay from the beginning so
+        if all(consumer.committed(tp) is None for tp in tps):
+            begin_offsets = consumer.beginning_offsets(tps)
+            for tp in tps:
+                consumer.seek(tp, begin_offsets[tp])
     except KafkaError as e:
         st.error(f"Kafka connection error: {e}")
         return None
+    else:
+        return consumer
 
 
 def parse_diagnosis_message(message: dict) -> dict | None:

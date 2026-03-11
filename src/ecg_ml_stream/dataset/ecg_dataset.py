@@ -52,6 +52,9 @@ class ECGDataset(Dataset):
             split (str): Dataset split to use ('train', 'val', 'test'). Defaults to 'train'.
             transforms (callable): Optional. Transformations to apply to each window.
 
+        Raises:
+            ValueError: If no records are found for the given split.
+
         """
         data_path = data_path or cfg.data.path
         sampling_rate = sampling_rate if sampling_rate is not None else cfg.data.sampling_rate
@@ -67,6 +70,11 @@ class ECGDataset(Dataset):
 
         self.metadata = self._load_metadata()
         self.records = self._get_split_records()
+
+        if len(self.records) == 0:
+            msg = f"No records found for split '{self.split}' at {self.data_path}"
+            raise ValueError(msg)
+
         self.window_index = self._create_window_index()
 
     def _load_metadata(self) -> pd.DataFrame:
@@ -161,12 +169,19 @@ class ECGDataset(Dataset):
         Returns:
             np.ndarray: Raw ECG signal of shape (12, signal_length).
 
+        Raises:
+            OSError: If the signal file cannot be read.
+
         """
         row = self.metadata.loc[ecg_id]
         key = "filename_lr" if self.sampling_rate == 100 else "filename_hr"
         filename = row[key]
         filepath = self.data_path / filename
-        signal, _ = wfdb.rdsamp(str(filepath))  # Returns (samples, channels)
+        try:
+            signal, _ = wfdb.rdsamp(str(filepath))  # Returns (samples, channels)
+        except Exception as exc:
+            msg = f"Failed to load signal from {filepath}"
+            raise OSError(msg) from exc
 
         return signal.T.astype(np.float32)  # Transpose to (channels, samples)
 

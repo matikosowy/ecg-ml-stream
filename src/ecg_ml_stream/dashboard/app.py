@@ -13,9 +13,25 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 from ecg_ml_stream.config import cfg
-from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
-from ecg_ml_stream.dashboard.plotting import create_ecg_plot, create_probability_chart
-from ecg_ml_stream.utils.constants import CLASS_COLORS, CLASS_DESCRIPTIONS, ECG_LEAD_NAMES
+from ecg_ml_stream.dashboard.auxiliary import (
+    get_kafka_consumer,
+    get_topic_message_count,
+    parse_diagnosis_message,
+)
+from ecg_ml_stream.dashboard.plotting import (
+    create_centroid_chart,
+    create_deviation_timeline,
+    create_ecg_plot,
+    create_probability_chart,
+)
+from ecg_ml_stream.dashboard.trend import TrendTracker
+from ecg_ml_stream.utils.constants import (
+    CLASS_COLORS,
+    CLASS_DESCRIPTIONS,
+    CLASS_NAMES,
+    DANGEROUS_CLASSES,
+    ECG_LEAD_NAMES,
+)
 from ecg_ml_stream.utils.mappings import CLASS_TRANSLATIONS
 
 st.set_page_config(
@@ -38,28 +54,32 @@ def main() -> None:
         st.header("Konfiguracja")
 
         kafka_servers = st.text_input(
-            "Kafka Bootstrap Servers",
+            "Broker Kafki",
             value=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", cfg.kafka.bootstrap_servers),
         )
-        topic = st.text_input("Kafka topic", value=cfg.kafka.topic_diagnoses)
-        auto_refresh = st.checkbox("Auto-refresh", value=True)
-        refresh_interval = st.slider("Refresh interval (s)", 1, 10, cfg.dashboard.refresh_interval)
-        max_records = st.slider("Max records", 10, 100, cfg.dashboard.max_records)
+        topic = st.text_input("Temat Kafki", value=cfg.kafka.topic_diagnoses)
+        auto_refresh = st.checkbox("Auto-odświeżanie", value=True)
+        refresh_interval = st.slider(
+            "Częstotliwość odświeżania (s)", 1, 10, cfg.dashboard.refresh_interval
+        )
+        max_records = st.slider("Wyświetlane rekordy", 10, 100, cfg.dashboard.max_records)
 
         st.markdown("---")
         st.header("Filtrowanie")
 
-        show_dangerous_only = st.checkbox("Dangerous diagnoses only")
+        show_dangerous_only = st.checkbox("Tylko niebezpieczne")
         selected_classes = st.multiselect(
-            "Filter classes",
+            "Filtruj po klasach",
             options=list(CLASS_DESCRIPTIONS.keys()),
             default=list(CLASS_DESCRIPTIONS.keys()),
         )
 
-    # Session state init
-    if "diagnoses" not in st.session_state or st.session_state.diagnoses.maxlen != max_records:
-        old = list(st.session_state.get("diagnoses", []))
-        st.session_state.diagnoses = deque(old[:max_records], maxlen=max_records)
+    # Session state init — fixed-size store, max_records only limits display
+    if "diagnoses" not in st.session_state:
+        st.session_state.diagnoses = deque(maxlen=cfg.dashboard.max_stored)
+
+    if "total_exams" not in st.session_state:
+        st.session_state.total_exams = 0
 
     if "last_update" not in st.session_state:
         st.session_state.last_update = datetime.now()  # noqa: DTZ005 - No timezone needed
@@ -67,32 +87,48 @@ def main() -> None:
     if "selected_exam" not in st.session_state:
         st.session_state.selected_exam = None
 
+    if "trend_tracker" not in st.session_state:
+        st.session_state.trend_tracker = TrendTracker(CLASS_NAMES)
+
     # Pull new messages from Kafka
     if auto_refresh:
         try:
+            topic_count = get_topic_message_count(kafka_servers, topic)
+            if topic_count is not None:
+                st.session_state.total_exams = topic_count
+
             consumer = get_kafka_consumer(
                 bootstrap_servers=kafka_servers,
                 topic=topic,
                 group_id=cfg.kafka.consumer_group,
             )
             if consumer:
-                for message in consumer:
-                    parsed = parse_diagnosis_message(message.value)
-                    if parsed:
-                        st.session_state.diagnoses.appendleft(parsed)
-                        st.session_state.last_update = datetime.now()  # noqa: DTZ005 - No timezone needed
-                consumer.close()
+                count = 0
+                try:
+                    for message in consumer:
+                        parsed = parse_diagnosis_message(message.value)
+                        if parsed:
+                            deviation = st.session_state.trend_tracker.update(parsed)
+                            parsed["deviation_score"] = deviation
+                            st.session_state.diagnoses.appendleft(parsed)
+                            count += 1
+                finally:
+                    consumer.close()
+                if count > 0:
+                    st.session_state.last_update = datetime.now()  # noqa: DTZ005
         except Exception as e:  # noqa: BLE001 - Catch all exceptions for connection errors
             st.warning(f"Cannot connect to Kafka: {e}")
 
     # Top row: metrics
     col1, col2, col3, col4 = st.columns(4)
     all_diagnoses = list(st.session_state.diagnoses)
-    dangerous_count = sum(1 for d in all_diagnoses if d.get("is_dangerous"))
-    normal_count = sum(1 for d in all_diagnoses if d.get("diagnosis_class") == "NORM")
+    tracker = st.session_state.trend_tracker
+    class_stats = tracker.get_class_stats()
+    normal_count = class_stats["NORM"]["count"]
+    dangerous_count = sum(class_stats[c]["count"] for c in DANGEROUS_CLASSES)
 
     with col1:
-        st.metric("Wszystkie badania", len(all_diagnoses))
+        st.metric("Wszystkie badania", st.session_state.total_exams)
     with col2:
         st.metric("W normie", normal_count)
     with col3:
@@ -183,6 +219,11 @@ def main() -> None:
             else:
                 st.success(diagnosis_text)
 
+            if selected.get("deviation_score") is not None:
+                st.markdown(
+                    f"**Odchylenie od trendu klasy:** {selected['deviation_score']:.4f}"
+                )
+
             if selected.get("ground_truth"):
                 correct = selected["ground_truth"] == diag_class
                 icon = "✅" if correct else "❌"
@@ -264,6 +305,46 @@ def main() -> None:
                 if total_with_gt > 0:
                     accuracy = correct / total_with_gt * 100
                     st.markdown(f"- **{accuracy:.1f}%** ({correct}/{total_with_gt})")
+
+    # Trend analysis
+    st.markdown("---")
+    st.subheader("Analiza trendu")
+
+    tracker = st.session_state.trend_tracker
+    centroids = {
+        c: tracker.get_centroid(c)
+        for c in CLASS_NAMES
+        if tracker.get_centroid(c) is not None
+    }
+
+    if centroids:
+        col_trend1, col_trend2 = st.columns(2)
+
+        with col_trend1:
+            st.plotly_chart(
+                create_centroid_chart(centroids),
+                use_container_width=True,
+            )
+
+        with col_trend2:
+            history = tracker.get_deviation_history()
+            if history:
+                st.plotly_chart(
+                    create_deviation_timeline(history, CLASS_NAMES),
+                    use_container_width=True,
+                )
+            else:
+                st.info("Zbyt mało danych dla wykresu odchyleń.")
+
+        stats = tracker.get_class_stats()
+        st.markdown("**Statystyki dla klas:**")
+        stat_cols = st.columns(len(CLASS_NAMES))
+        for col, cls in zip(stat_cols, CLASS_NAMES, strict=True):
+            with col:
+                count = stats[cls]["count"]
+                st.markdown(f"**{cls}**  \nPróbek: {count}")
+    else:
+        st.info("Brak danych do analizy trendu...")
 
     if auto_refresh:
         st_autorefresh(interval=refresh_interval * 1000, key="ecg_autorefresh")

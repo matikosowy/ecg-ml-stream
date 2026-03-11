@@ -5,6 +5,7 @@ Copyright 2026 Mateusz Golebiewski
 
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 import torch
 
@@ -23,6 +24,44 @@ class TestECGDataset:
     def test_invalid_split_raises(self, csv_mocks, tmp_path):
         with pytest.raises(ValueError, match="Unknown split"):
             ECGDataset(str(tmp_path), split="unknown")
+
+    def test_empty_split_raises_value_error(self, tmp_path):
+        meta = pd.DataFrame(
+            {
+                "scp_codes": ["{'NORM': 100.0}"] * 3,
+                "strat_fold": [1, 1, 1],
+                "filename_lr": [f"records100/{i:05d}_lr" for i in range(3)],
+                "filename_hr": [f"records500/{i:05d}_hr" for i in range(3)],
+                "age": [50, 51, 52],
+                "sex": [0, 1, 0],
+                "patient_id": [1001, 1002, 1003],
+            },
+            index=pd.Index(range(1, 4), name="ecg_id"),
+        )
+        scp = pd.DataFrame(
+            {"diagnostic": [1], "diagnostic_class": ["NORM"]},
+            index=["NORM"],
+        )
+
+        def side_effect(path, **kwargs):
+            if "ptbxl_database" in str(path):
+                return meta.copy()
+            return scp.copy()
+
+        with (
+            patch("ecg_ml_stream.dataset.ecg_dataset.pd.read_csv", side_effect=side_effect),
+            pytest.raises(ValueError, match="No records found for split 'val'"),
+        ):
+            ECGDataset(str(tmp_path), sampling_rate=100, split="val")
+
+    def test_load_signal_oserror_on_failure(self, csv_mocks, tmp_path):
+        ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
+        ecg_id = ds.records.index[0]
+        with (
+            patch(_RDSAMP, side_effect=RuntimeError("disk error")),
+            pytest.raises(OSError, match="Failed to load signal"),
+        ):
+            ds._load_signal(ecg_id)
 
     def test_getitem_returns_tensor_and_label(
         self,
