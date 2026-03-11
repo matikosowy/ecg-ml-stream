@@ -97,6 +97,16 @@ class TestECGClassifier:
         assert len(result["window_predictions"]) == 7
         assert len(result["window_predictions"][0]) == 5
 
+    def test_predict_windows_raises_for_wrong_channels(self, untrained_classifier):
+        wrong = torch.randn(7, 6, 250)  # 6 channels instead of 12
+        with pytest.raises(ValueError, match="Expected tensor of shape"):
+            untrained_classifier.predict_windows(wrong)
+
+    def test_predict_windows_raises_for_2d_tensor(self, untrained_classifier):
+        wrong = torch.randn(12, 250)  # 2D instead of 3D
+        with pytest.raises(ValueError, match="Expected tensor of shape"):
+            untrained_classifier.predict_windows(wrong)
+
 
 class TestECGClassifierSaveLoad:
     def test_save_creates_file(self, tmp_path, untrained_classifier):

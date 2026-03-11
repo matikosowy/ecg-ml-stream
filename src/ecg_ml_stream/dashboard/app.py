@@ -13,7 +13,11 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 from ecg_ml_stream.config import cfg
-from ecg_ml_stream.dashboard.auxiliary import get_kafka_consumer, parse_diagnosis_message
+from ecg_ml_stream.dashboard.auxiliary import (
+    get_kafka_consumer,
+    get_topic_message_count,
+    parse_diagnosis_message,
+)
 from ecg_ml_stream.dashboard.plotting import (
     create_centroid_chart,
     create_deviation_timeline,
@@ -49,28 +53,30 @@ def main() -> None:
         st.header("Konfiguracja")
 
         kafka_servers = st.text_input(
-            "Kafka Bootstrap Servers",
+            "Broker Kafki",
             value=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", cfg.kafka.bootstrap_servers),
         )
-        topic = st.text_input("Kafka topic", value=cfg.kafka.topic_diagnoses)
-        auto_refresh = st.checkbox("Auto-refresh", value=True)
-        refresh_interval = st.slider("Refresh interval (s)", 1, 10, cfg.dashboard.refresh_interval)
-        max_records = st.slider("Max records", 10, 100, cfg.dashboard.max_records)
+        topic = st.text_input("Temat Kafki", value=cfg.kafka.topic_diagnoses)
+        auto_refresh = st.checkbox("Auto-odświeżanie", value=True)
+        refresh_interval = st.slider("Częstotliwość odświeżania (s)", 1, 10, cfg.dashboard.refresh_interval)
+        max_records = st.slider("Wyświetlane rekordy", 10, 100, cfg.dashboard.max_records)
 
         st.markdown("---")
         st.header("Filtrowanie")
 
-        show_dangerous_only = st.checkbox("Dangerous diagnoses only")
+        show_dangerous_only = st.checkbox("Tylko niebezpieczne")
         selected_classes = st.multiselect(
-            "Filter classes",
+            "Filtruj po klasach",
             options=list(CLASS_DESCRIPTIONS.keys()),
             default=list(CLASS_DESCRIPTIONS.keys()),
         )
 
-    # Session state init
-    if "diagnoses" not in st.session_state or st.session_state.diagnoses.maxlen != max_records:
-        old = list(st.session_state.get("diagnoses", []))
-        st.session_state.diagnoses = deque(old[:max_records], maxlen=max_records)
+    # Session state init — fixed-size store, max_records only limits display
+    if "diagnoses" not in st.session_state:
+        st.session_state.diagnoses = deque(maxlen=cfg.dashboard.max_stored)
+
+    if "total_exams" not in st.session_state:
+        st.session_state.total_exams = 0
 
     if "last_update" not in st.session_state:
         st.session_state.last_update = datetime.now()  # noqa: DTZ005 - No timezone needed
@@ -84,24 +90,30 @@ def main() -> None:
     # Pull new messages from Kafka
     if auto_refresh:
         try:
+            topic_count = get_topic_message_count(kafka_servers, topic)
+            if topic_count is not None:
+                st.session_state.total_exams = topic_count
+
             consumer = get_kafka_consumer(
                 bootstrap_servers=kafka_servers,
                 topic=topic,
                 group_id=cfg.kafka.consumer_group,
+                max_backfill=cfg.dashboard.max_stored,
             )
             if consumer:
                 count = 0
-                for message in consumer:
-                    parsed = parse_diagnosis_message(message.value)
-                    if parsed:
-                        deviation = st.session_state.trend_tracker.update(parsed)
-                        parsed["deviation_score"] = deviation
-                        st.session_state.diagnoses.appendleft(parsed)
-                        count += 1
-                    if count >= max_records:
-                        break
-                st.session_state.last_update = datetime.now()  # noqa: DTZ005
-                consumer.close()
+                try:
+                    for message in consumer:
+                        parsed = parse_diagnosis_message(message.value)
+                        if parsed:
+                            deviation = st.session_state.trend_tracker.update(parsed)
+                            parsed["deviation_score"] = deviation
+                            st.session_state.diagnoses.appendleft(parsed)
+                            count += 1
+                finally:
+                    consumer.close()
+                if count > 0:
+                    st.session_state.last_update = datetime.now()  # noqa: DTZ005
         except Exception as e:  # noqa: BLE001 - Catch all exceptions for connection errors
             st.warning(f"Cannot connect to Kafka: {e}")
 
@@ -112,7 +124,7 @@ def main() -> None:
     normal_count = sum(1 for d in all_diagnoses if d.get("diagnosis_class") == "NORM")
 
     with col1:
-        st.metric("Wszystkie badania", len(all_diagnoses))
+        st.metric("Wszystkie badania", st.session_state.total_exams)
     with col2:
         st.metric("W normie", normal_count)
     with col3:
