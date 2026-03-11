@@ -72,21 +72,18 @@ def get_kafka_consumer(
     bootstrap_servers: str,
     topic: str,
     group_id: str,
-    max_backfill: int = 100,
 ) -> KafkaConsumer | None:
-    """Create a Kafka consumer positioned to read recent messages.
+    """Create a Kafka consumer positioned to read all topic messages.
 
-    On a new session (no committed offsets) the consumer seeks to at most
-    ``max_backfill`` messages from the end of each partition, avoiding a
-    full replay of the topic.  On subsequent auto-refresh cycles the
-    committed offsets are reused so only new messages are fetched.
+    On a new session (no committed offsets) the consumer seeks to the
+    beginning of each partition so that the TrendTracker processes the full
+    topic history.  On subsequent auto-refresh cycles the committed offsets
+    are reused so only new messages are fetched.
 
     Args:
         bootstrap_servers (str): Comma-separated list of Kafka bootstrap servers.
         topic (str): Kafka topic to subscribe to.
         group_id (str): Base Kafka consumer group ID (suffixed per session).
-        max_backfill (int): Maximum number of recent messages to load on a
-            fresh session.  Defaults to 100.
 
     Returns:
         KafkaConsumer | None: A KafkaConsumer instance if successful, or None.
@@ -110,14 +107,11 @@ def get_kafka_consumer(
         tps = [TopicPartition(topic, p) for p in partitions]
         consumer.assign(tps)
 
-        # New session: no committed offsets — seek to recent messages only
+        # New session: no committed offsets — replay from the beginning so
         if all(consumer.committed(tp) is None for tp in tps):
-            end_offsets = consumer.end_offsets(tps)
             begin_offsets = consumer.beginning_offsets(tps)
-            per_partition = max(1, max_backfill // len(tps))
             for tp in tps:
-                target = max(begin_offsets[tp], end_offsets[tp] - per_partition)
-                consumer.seek(tp, target)
+                consumer.seek(tp, begin_offsets[tp])
     except KafkaError as e:
         st.error(f"Kafka connection error: {e}")
         return None

@@ -29,6 +29,7 @@ from ecg_ml_stream.utils.constants import (
     CLASS_COLORS,
     CLASS_DESCRIPTIONS,
     CLASS_NAMES,
+    DANGEROUS_CLASSES,
     ECG_LEAD_NAMES,
 )
 from ecg_ml_stream.utils.mappings import CLASS_TRANSLATIONS
@@ -58,7 +59,9 @@ def main() -> None:
         )
         topic = st.text_input("Temat Kafki", value=cfg.kafka.topic_diagnoses)
         auto_refresh = st.checkbox("Auto-odświeżanie", value=True)
-        refresh_interval = st.slider("Częstotliwość odświeżania (s)", 1, 10, cfg.dashboard.refresh_interval)
+        refresh_interval = st.slider(
+            "Częstotliwość odświeżania (s)", 1, 10, cfg.dashboard.refresh_interval
+        )
         max_records = st.slider("Wyświetlane rekordy", 10, 100, cfg.dashboard.max_records)
 
         st.markdown("---")
@@ -98,7 +101,6 @@ def main() -> None:
                 bootstrap_servers=kafka_servers,
                 topic=topic,
                 group_id=cfg.kafka.consumer_group,
-                max_backfill=cfg.dashboard.max_stored,
             )
             if consumer:
                 count = 0
@@ -120,8 +122,10 @@ def main() -> None:
     # Top row: metrics
     col1, col2, col3, col4 = st.columns(4)
     all_diagnoses = list(st.session_state.diagnoses)
-    dangerous_count = sum(1 for d in all_diagnoses if d.get("is_dangerous"))
-    normal_count = sum(1 for d in all_diagnoses if d.get("diagnosis_class") == "NORM")
+    tracker = st.session_state.trend_tracker
+    class_stats = tracker.get_class_stats()
+    normal_count = class_stats["NORM"]["count"]
+    dangerous_count = sum(class_stats[c]["count"] for c in DANGEROUS_CLASSES)
 
     with col1:
         st.metric("Wszystkie badania", st.session_state.total_exams)

@@ -137,12 +137,12 @@ class TestGetKafkaConsumer:
     def test_seeks_on_new_session(self):
         mock = _mock_consumer(committed_offset=None)
         with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
-            get_kafka_consumer("localhost:9092", "topic", "g", max_backfill=50)
+            get_kafka_consumer("localhost:9092", "topic", "g")
         mock.seek.assert_called_once()
         target = mock.seek.call_args[0][1]
-        assert target == 150  # end=200, backfill=50/1 partition
+        assert target == 0  # seek to beginning offset
 
-    def test_seek_respects_beginning_offset(self):
+    def test_seeks_to_beginning_offset(self):
         mock = MagicMock()
         mock.partitions_for_topic.return_value = {0}
         tp = TopicPartition("topic", 0)
@@ -151,9 +151,9 @@ class TestGetKafkaConsumer:
         mock.beginning_offsets.return_value = {tp: 20}
 
         with patch(f"{_AUXILIARY}.KafkaConsumer", return_value=mock):
-            get_kafka_consumer("localhost:9092", "topic", "g", max_backfill=100)
+            get_kafka_consumer("localhost:9092", "topic", "g")
         target = mock.seek.call_args[0][1]
-        assert target == 20  # max(20, 30-100) = 20
+        assert target == 20  # always seek to beginning_offsets value
 
     def test_no_seek_when_offsets_committed(self):
         mock = _mock_consumer(committed_offset=180)
