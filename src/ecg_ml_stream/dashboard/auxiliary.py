@@ -145,6 +145,7 @@ def parse_diagnosis_message(message: dict) -> dict | None:
             "hospital_id": message.get("hospital", {}).get("id", "N/A"),
             "hospital_name": message.get("hospital", {}).get("name", "N/A"),
             "hospital_city": message.get("hospital", {}).get("city", "N/A"),
+            "patient_id": message.get("patient", {}).get("patient_id"),
             "patient_age": message.get("patient", {}).get("age"),
             "patient_sex": message.get("patient", {}).get("sex"),
             "patient_ecg_id": message.get("patient", {}).get("ecg_id"),

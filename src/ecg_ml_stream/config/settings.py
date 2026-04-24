@@ -79,6 +79,7 @@ class ProducerConfig:
 
     num_threads: int
     interval_sec: float
+    returning_patient_bias: float
 
 
 @dataclass

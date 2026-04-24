@@ -7,7 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from ecg_ml_stream.utils.constants import CLASS_COLORS, ECG_LEAD_NAMES, NUM_LEADS
+from ecg_ml_stream.utils.constants import CLASS_COLORS, ECG_LEAD_NAMES
 
 
 def create_ecg_plot(
@@ -132,100 +132,61 @@ def create_probability_chart(probabilities: dict[str, float]) -> go.Figure:
     return fig
 
 
-def create_centroid_chart(
-    centroids: dict[str, np.ndarray],
-    n_leads: int = NUM_LEADS,
+def create_patient_exam_timeline(
+    patient_history: list[dict],
+    patient_id: int,
 ) -> go.Figure:
-    """Render grouped bar chart of per-class mean signal amplitude per lead.
+    """Render a timeline of diagnosis classes for a single patient's exams.
 
     Args:
-        centroids: Dict mapping class name to centroid array of shape
-            (n_leads * 2,) where even indices are mean amplitudes and odd
-            indices are standard deviations.
-        n_leads: Number of ECG leads.
+        patient_history: List of exam dicts with diagnosis_class and
+            timestamp_processed fields (oldest first).
+        patient_id: PTB-XL patient identifier used for the chart title.
 
     Returns:
-        go.Figure: Plotly Figure with one bar group per class.
+        go.Figure: Plotly Figure with one marker per exam.
 
     """
+    if not patient_history:
+        return go.Figure()
+
+    exam_numbers = list(range(1, len(patient_history) + 1))
+    classes = [e.get("diagnosis_class", "") for e in patient_history]
+    timestamps = [e.get("timestamp_processed") or "" for e in patient_history]
+    colors = [CLASS_COLORS.get(c, "#888888") for c in classes]
+    changed = [False] + [classes[i] != classes[i - 1] for i in range(1, len(classes))]
+
     fig = go.Figure()
-    lead_labels = ECG_LEAD_NAMES[:n_leads]
-
-    for cls, centroid in centroids.items():
-        amplitudes = [centroid[i * 2] for i in range(n_leads)]
-        fig.add_trace(
-            go.Bar(
-                name=cls,
-                x=lead_labels,
-                y=amplitudes,
-                marker_color=CLASS_COLORS.get(cls, "#888888"),
-                text=[f"{v:.3f}" for v in amplitudes],
-                textposition="outside",
-            )
+    fig.add_trace(
+        go.Scatter(
+            x=exam_numbers,
+            y=classes,
+            mode="markers+lines",
+            marker={
+                "color": colors,
+                "size": [14 if ch else 9 for ch in changed],
+                "symbol": ["star" if ch else "circle" for ch in changed],
+                "line": {"width": 1, "color": "white"},
+            },
+            line={"color": "lightgray", "width": 1},
+            text=[
+                f"Badanie {n}<br>{c}<br>{ts[:19] if ts else 'brak czasu'}"
+                for n, c, ts in zip(exam_numbers, classes, timestamps, strict=True)
+            ],
+            hovertemplate="%{text}<extra></extra>",
+            showlegend=False,
         )
-
-    fig.update_layout(
-        title="Średnia amplituda sygnalu per sonda i klasa",
-        xaxis_title="Sonda EKG",
-        yaxis_title="Średnia amplituda",
-        barmode="group",
-        height=350,
-        margin={"l": 40, "r": 20, "t": 40, "b": 40},
     )
-    return fig
-
-
-def create_deviation_timeline(
-    history: list[dict],
-    class_names: list[str],
-) -> go.Figure:
-    """Render a scatter plot of per-sample deviation scores over time.
-
-    Args:
-        history: List of dicts with timestamp, deviation, exam_id, class_name.
-        class_names: Ordered list of class names for trace grouping.
-
-    Returns:
-        go.Figure: Plotly Figure with one scatter trace per class.
-
-    """
-    fig = go.Figure()
-
-    grouped: dict[str, list[dict]] = {c: [] for c in class_names}
-    for entry in history:
-        cls = entry.get("class_name", "")
-        if cls in grouped:
-            grouped[cls].append(entry)
-
-    for cls in class_names:
-        entries = grouped[cls]
-        if not entries:
-            continue
-
-        fig.add_trace(
-            go.Scatter(
-                x=[e["timestamp"] for e in entries],
-                y=[e["deviation"] for e in entries],
-                mode="markers",
-                name=cls,
-                marker={
-                    "color": CLASS_COLORS.get(cls, "#888888"),
-                    "size": 6,
-                },
-                hovertemplate=(
-                    "%{text}<br>"
-                    "Odchylenie: %{y:.4f}<br>"
-                    "<extra>%{fullData.name}</extra>"
-                ),
-                text=[e.get("exam_id", "")[:8] for e in entries],
-            )
-        )
 
     fig.update_layout(
-        title="Odchylenie od centroidu klasy w czasie",
-        xaxis_title="Czas",
-        yaxis_title="Odchylenie (odległość euklidesowa)",
-        height=350,
-        margin={"l": 40, "r": 20, "t": 40, "b": 40},
+        title=f"Historia badań pacjenta {patient_id}",
+        xaxis={
+            "title": "Nr badania",
+            "tickmode": "linear",
+            "dtick": 1,
+        },
+        yaxis_title="Diagnoza",
+        height=300,
+        margin={"l": 60, "r": 20, "t": 40, "b": 40},
     )
     return fig

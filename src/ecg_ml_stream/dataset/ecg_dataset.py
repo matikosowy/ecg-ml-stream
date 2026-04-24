@@ -257,6 +257,36 @@ class ECGDataset(Dataset):
 
         return torch.from_numpy(np.stack(windows, axis=0)), label
 
+    @property
+    def multi_record_patient_ids(self) -> frozenset[int]:
+        """Return IDs of patients with at least 2 records in this split."""
+        counts = self.records["patient_id"].value_counts()
+        return frozenset(
+            int(pid) for pid in counts[counts >= 2].index if pd.notna(pid)
+        )
+
+    def _build_sample(self, ecg_id: int, row: pd.Series) -> dict:
+        """Build a streaming sample dict from a loaded record row.
+
+        Args:
+            ecg_id (int): PTB-XL record identifier.
+            row (pd.Series): Metadata row for the record.
+
+        Returns:
+            dict: JSON-serializable sample dict.
+
+        """
+        signal = self._load_signal(ecg_id)
+        return {
+            "ecg_id": int(ecg_id),
+            "signal": signal.tolist(),
+            "label": int(row["label"]),
+            "label_name": self.CLASS_NAMES[int(row["label"])],
+            "patient_id": (int(row["patient_id"]) if pd.notna(row["patient_id"]) else None),
+            "age": int(row["age"]) if pd.notna(row["age"]) else None,
+            "sex": int(row["sex"]) if pd.notna(row["sex"]) else None,
+        }
+
     def get_sample_for_streaming(self, idx: int | None = None) -> dict:
         """Return a record formatted for Kafka streaming.
 
@@ -273,18 +303,25 @@ class ECGDataset(Dataset):
             idx = int(np.random.default_rng().integers(len(self.records)))
 
         ecg_id = self.records.index[idx]
-        row = self.records.loc[ecg_id]
-        signal = self._load_signal(ecg_id)
+        return self._build_sample(ecg_id, self.records.loc[ecg_id])
 
-        return {
-            "ecg_id": int(ecg_id),
-            "signal": signal.tolist(),
-            "label": int(row["label"]),
-            "label_name": self.CLASS_NAMES[int(row["label"])],
-            "patient_id": (int(row["patient_id"]) if pd.notna(row["patient_id"]) else None),
-            "age": int(row["age"]) if pd.notna(row["age"]) else None,
-            "sex": int(row["sex"]) if pd.notna(row["sex"]) else None,
-        }
+    def get_sample_for_patient(self, patient_id: int) -> dict | None:
+        """Return a random record for a given patient from this split.
+
+        Args:
+            patient_id (int): PTB-XL patient identifier.
+
+        Returns:
+            dict | None: Sample dict for a random record of that patient,
+                or None if the patient has no records in this split.
+
+        """
+        patient_records = self.records[self.records["patient_id"] == patient_id]
+        if patient_records.empty:
+            return None
+        rng = np.random.default_rng()
+        ecg_id = patient_records.index[rng.integers(len(patient_records))]
+        return self._build_sample(ecg_id, self.records.loc[ecg_id])
 
     def get_class_weights(self) -> torch.Tensor:
         """Compute inverse-frequency class weights for the training split.

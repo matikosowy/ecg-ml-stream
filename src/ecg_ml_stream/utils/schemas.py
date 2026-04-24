@@ -33,6 +33,7 @@ STREAM_INPUT_SCHEMA = StructType(
             "patient",
             StructType(
                 [
+                    StructField("patient_id", IntegerType(), True),
                     StructField("ecg_id", StringType(), True),
                     StructField("age", IntegerType(), True),
                     StructField("sex", StringType(), True),

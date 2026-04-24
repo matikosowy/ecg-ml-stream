@@ -1,4 +1,4 @@
-"""Trend tracking module for ECG-ML-STREAM.
+"""Patient history tracking module for ECG-ML-STREAM.
 
 Copyright 2026 Mateusz Golebiewski
 """
@@ -7,9 +7,7 @@ from collections import deque
 
 import numpy as np
 
-from ecg_ml_stream.utils.constants import CLASS_NAMES, NUM_LEADS
-
-_FEATURES_PER_LEAD = 2  # mean_amplitude, std
+from ecg_ml_stream.utils.constants import NUM_LEADS
 
 
 def extract_signal_features(signal_data: list[list[float]]) -> np.ndarray | None:
@@ -37,189 +35,112 @@ def extract_signal_features(signal_data: list[list[float]]) -> np.ndarray | None
     return np.array(features, dtype=np.float64)
 
 
-class TrendTracker:
-    """Maintain per-class running statistics on ECG signal features.
+class PatientHistoryTracker:
+    """Track examination history per patient and compute inter-exam comparison metrics.
 
-    Uses Welford's online algorithm for numerically stable computation
-    of running mean and variance. Tracks deviation history for timeline
-    visualisation.
-
-    Each sample is represented as a feature vector of per-lead statistics
-    (mean amplitude, std) rather than model output probabilities.
+    For each new diagnosis the tracker returns:
+        - which sequential exam this is for the patient
+        - Euclidean distance between signal features of the current and previous exam
+        - whether the diagnosis class changed since the previous exam
     """
 
     def __init__(
         self,
-        class_names: list[str] | None = None,
-        max_history: int = 200,
+        max_exams_per_patient: int = 50,
         n_leads: int = NUM_LEADS,
     ) -> None:
-        """Initialize the trend tracker.
+        """Initialize the tracker.
 
         Args:
-            class_names: List of diagnosis class names. Defaults to CLASS_NAMES.
-            max_history: Maximum deviation history entries per class.
-            n_leads: Number of ECG leads.
+            max_exams_per_patient: Maximum exams stored per patient (FIFO).
+            n_leads: Number of ECG leads used for feature extraction.
 
         """
-        self._class_names = class_names or CLASS_NAMES
+        self._max_exams = max_exams_per_patient
         self._n_leads = n_leads
-        self._n_features = n_leads * _FEATURES_PER_LEAD
-        self._max_history = max_history
+        self._history: dict[int, deque] = {}
 
-        self._count: dict[str, int] = dict.fromkeys(self._class_names, 0)
-        self._mean: dict[str, np.ndarray] = {
-            c: np.zeros(self._n_features) for c in self._class_names
-        }
-        self._m2: dict[str, np.ndarray] = {
-            c: np.zeros(self._n_features) for c in self._class_names
-        }
-        self._history: dict[str, deque] = {
-            c: deque(maxlen=max_history) for c in self._class_names
-        }
-
-    def update(self, diagnosis: dict) -> float | None:
-        """Update running statistics with a new diagnosis and return deviation.
-
-        Extracts per-lead signal features, applies Welford's update,
-        and computes the z-score based deviation from the class centroid.
+    def update(self, diagnosis: dict) -> dict:
+        """Register a new exam and return comparison with the previous one.
 
         Args:
-            diagnosis: Parsed diagnosis dict with 'diagnosis_class',
-                'signal_data', 'exam_id', and 'timestamp_processed' keys.
+            diagnosis: Parsed diagnosis dict.  Must contain 'patient_id',
+                'diagnosis_class', 'signal_data', 'exam_id', and
+                'timestamp_processed'.
 
         Returns:
-            Deviation score (mean absolute z-score), or None if update skipped.
+            Dict with keys:
+                - exam_number (int | None): 1-based position in patient history.
+                - feature_deviation (float | None): Euclidean distance between
+                  the 24-feature vector of this exam and the previous one.
+                  None for the first exam or when signal data is unavailable.
+                - class_changed (bool | None): True when the diagnosis class
+                  differs from the previous exam.  None for the first exam.
+                - prev_diagnosis_class (str | None): Class from the previous exam.
 
         """
-        class_name = diagnosis.get("diagnosis_class")
-        signal_data = diagnosis.get("signal_data")
+        result: dict = {
+            "exam_number": None,
+            "feature_deviation": None,
+            "class_changed": None,
+            "prev_diagnosis_class": None,
+        }
 
-        if class_name not in self._count:
-            return None
+        patient_id = diagnosis.get("patient_id")
+        if patient_id is None:
+            return result
 
-        features = extract_signal_features(signal_data)
-        if features is None or len(features) != self._n_features:
-            return None
+        if patient_id not in self._history:
+            self._history[patient_id] = deque(maxlen=self._max_exams)
 
-        n = self._count[class_name] + 1
-        self._count[class_name] = n
+        history = self._history[patient_id]
+        result["exam_number"] = len(history) + 1
 
-        old_mean = self._mean[class_name].copy()
-        delta = features - old_mean
-        self._mean[class_name] = old_mean + delta / n
-        delta2 = features - self._mean[class_name]
-        self._m2[class_name] += delta * delta2
+        features = extract_signal_features(diagnosis.get("signal_data"))
 
-        deviation = self._compute_deviation(features, class_name)
+        if history:
+            prev = history[-1]
+            result["prev_diagnosis_class"] = prev["diagnosis_class"]
+            result["class_changed"] = prev["diagnosis_class"] != diagnosis.get("diagnosis_class")
+            prev_features = prev.get("features")
+            if features is not None and prev_features is not None:
+                result["feature_deviation"] = float(np.linalg.norm(features - prev_features))
 
-        self._history[class_name].append({
-            "timestamp": diagnosis.get("timestamp_processed"),
-            "deviation": deviation,
-            "exam_id": diagnosis.get("exam_id", ""),
-            "class_name": class_name,
+        history.append({
+            "exam_id": diagnosis.get("exam_id"),
+            "timestamp_processed": diagnosis.get("timestamp_processed"),
+            "diagnosis_class": diagnosis.get("diagnosis_class"),
+            "features": features,
         })
 
-        return deviation
-
-    def _compute_deviation(
-        self,
-        features: np.ndarray,
-        class_name: str,
-    ) -> float:
-        """Compute mean absolute z-score of features vs class centroid.
-
-        Returns:
-            Mean absolute z-score across all feature dimensions.
-            Returns 0.0 if variance is not yet available (< 2 samples).
-
-        """
-        n = self._count[class_name]
-        if n < 2:  # noqa: PLR2004 - Welford needs at least 2 samples
-            return 0.0
-
-        variance = self._m2[class_name] / (n - 1)
-        std = np.sqrt(np.maximum(variance, 1e-12))
-        z_scores = np.abs(features - self._mean[class_name]) / std
-        return float(np.mean(z_scores))
-
-    def get_centroid(self, class_name: str) -> np.ndarray | None:
-        """Return the running mean feature vector for a class.
-
-        Returns:
-            Numpy array of shape (n_features,) or None if no samples seen.
-
-        """
-        if self._count.get(class_name, 0) == 0:
-            return None
-        return self._mean[class_name].copy()
-
-    def get_centroid_per_lead(self, class_name: str) -> dict[str, dict] | None:
-        """Return per-lead centroid statistics for a class.
-
-        Returns:
-            Dict mapping lead index to {mean_amplitude, std}, or None.
-
-        """
-        centroid = self.get_centroid(class_name)
-        if centroid is None:
-            return None
-
-        result = {}
-        for i in range(self._n_leads):
-            base = i * _FEATURES_PER_LEAD
-            result[i] = {
-                "mean_amplitude": centroid[base],
-                "std": centroid[base + 1],
-            }
         return result
 
-    def get_variance(self, class_name: str) -> np.ndarray | None:
-        """Return the running variance of the feature vector for a class.
-
-        Returns:
-            Numpy array of shape (n_features,) or None if fewer than 2 samples.
-
-        """
-        n = self._count.get(class_name, 0)
-        if n < 2:  # noqa: PLR2004 - Welford needs at least 2 samples
-            return None
-        return (self._m2[class_name] / (n - 1)).copy()
-
-    def get_class_stats(self) -> dict[str, dict]:
-        """Return summary statistics for all classes.
-
-        Returns:
-            Dict mapping class name to {count, centroid, variance}.
-
-        """
-        return {
-            c: {
-                "count": self._count[c],
-                "centroid": self.get_centroid(c),
-                "variance": self.get_variance(c),
-            }
-            for c in self._class_names
-        }
-
-    def get_deviation_history(
-        self,
-        class_name: str | None = None,
-    ) -> list[dict]:
-        """Return deviation history entries.
+    def get_patient_history(self, patient_id: int) -> list[dict]:
+        """Return all stored exams for a patient (oldest first).
 
         Args:
-            class_name: If provided, return history for that class only.
-                If None, return combined history for all classes sorted by timestamp.
+            patient_id: PTB-XL patient identifier.
 
         Returns:
-            List of dicts with timestamp, deviation, exam_id, class_name.
+            List of exam dicts with exam_id, timestamp_processed, and
+            diagnosis_class fields.
 
         """
-        if class_name is not None:
-            return list(self._history.get(class_name, []))
+        return [
+            {k: v for k, v in entry.items() if k != "features"}
+            for entry in self._history.get(patient_id, [])
+        ]
 
-        combined = []
-        for entries in self._history.values():
-            combined.extend(entries)
-        return sorted(combined, key=lambda x: x.get("timestamp") or "")
+    def get_stats(self) -> dict:
+        """Return summary statistics across all tracked patients.
+
+        Returns:
+            Dict with total_patients and patients_with_history counts.
+
+        """
+        total = len(self._history)
+        with_history = sum(1 for h in self._history.values() if len(h) > 1)
+        return {
+            "total_patients": total,
+            "patients_with_history": with_history,
+        }

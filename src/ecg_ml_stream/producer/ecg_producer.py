@@ -10,6 +10,7 @@ import random
 import threading
 import time
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -98,12 +99,52 @@ class ECGProducer:
         )
         logger.info("Loaded %s ECG records.", len(self.dataset.records))
 
+        self._multi_record_patient_ids = self.dataset.multi_record_patient_ids
+        logger.info(
+            "Patients with >=2 records in test split: %s", len(self._multi_record_patient_ids)
+        )
+        # Shared deque of recently sent patients eligible for a follow-up exam
+        self._returning_patients: deque[int] = deque(maxlen=40)
+        self._returning_lock = threading.Lock()
+
         self.stats: dict = {"sent": 0, "errors": 0, "start_time": None}
         self.stats_lock = threading.Lock()
         self.running = False
 
+    def _pick_sample(
+        self,
+        returning_patient_bias: float = 0.35,
+    ) -> dict:
+        """Select a PTB-XL record, biasing toward returning patients.
+
+        Args:
+            returning_patient_bias (float): Probability of selecting a returning patient
+                if available.
+
+        Returns:
+            dict: Sample dict from ECGDataset.
+
+        """
+        returning_patient_id: int | None = None
+        with self._returning_lock:
+            if self._returning_patients and random.random() < returning_patient_bias:
+                returning_patient_id = random.choice(list(self._returning_patients))
+
+        if returning_patient_id is not None:
+            sample = self.dataset.get_sample_for_patient(returning_patient_id)
+            if sample is not None:
+                return sample
+
+        sample = self.dataset.get_sample_for_streaming()
+        patient_id = sample.get("patient_id")
+        if patient_id and patient_id in self._multi_record_patient_ids:
+            with self._returning_lock:
+                if patient_id not in self._returning_patients:
+                    self._returning_patients.append(patient_id)
+        return sample
+
     def _create_message(self, thread_id: int) -> dict:
-        """Build a Kafka message from randomly selected PTB-XL record.
+        """Build a Kafka message from a PTB-XL record.
 
         Args:
             thread_id (int): Index of the calling producer thread.
@@ -112,7 +153,7 @@ class ECGProducer:
             dict: Dictionary ready for JSON serialization and Kafka publishing.
 
         """
-        sample = self.dataset.get_sample_for_streaming()
+        sample = self._pick_sample(returning_patient_bias=cfg.producer.returning_patient_bias)
         hospital = random.choice(self.HOSPITALS)
         exam_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()  # noqa: DTZ005 - No timezone needed
@@ -123,6 +164,7 @@ class ECGProducer:
             "hospital": hospital,
             "thread_id": thread_id,
             "patient": {
+                "patient_id": sample["patient_id"],
                 "ecg_id": sample["ecg_id"],
                 "age": sample["age"],
                 "sex": ("M" if sample["sex"] == 0 else "F" if sample["sex"] == 1 else None),

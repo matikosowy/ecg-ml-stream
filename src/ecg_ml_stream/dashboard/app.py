@@ -19,17 +19,14 @@ from ecg_ml_stream.dashboard.auxiliary import (
     parse_diagnosis_message,
 )
 from ecg_ml_stream.dashboard.plotting import (
-    create_centroid_chart,
-    create_deviation_timeline,
     create_ecg_plot,
+    create_patient_exam_timeline,
     create_probability_chart,
 )
-from ecg_ml_stream.dashboard.trend import TrendTracker
+from ecg_ml_stream.dashboard.trend import PatientHistoryTracker
 from ecg_ml_stream.utils.constants import (
     CLASS_COLORS,
     CLASS_DESCRIPTIONS,
-    CLASS_NAMES,
-    DANGEROUS_CLASSES,
     ECG_LEAD_NAMES,
 )
 from ecg_ml_stream.utils.mappings import CLASS_TRANSLATIONS
@@ -74,7 +71,7 @@ def main() -> None:
             default=list(CLASS_DESCRIPTIONS.keys()),
         )
 
-    # Session state init — fixed-size store, max_records only limits display
+    # Session state init
     if "diagnoses" not in st.session_state:
         st.session_state.diagnoses = deque(maxlen=cfg.dashboard.max_stored)
 
@@ -87,8 +84,8 @@ def main() -> None:
     if "selected_exam" not in st.session_state:
         st.session_state.selected_exam = None
 
-    if "trend_tracker" not in st.session_state:
-        st.session_state.trend_tracker = TrendTracker(CLASS_NAMES)
+    if "patient_tracker" not in st.session_state:
+        st.session_state.patient_tracker = PatientHistoryTracker()
 
     # Pull new messages from Kafka
     if auto_refresh:
@@ -108,8 +105,8 @@ def main() -> None:
                     for message in consumer:
                         parsed = parse_diagnosis_message(message.value)
                         if parsed:
-                            deviation = st.session_state.trend_tracker.update(parsed)
-                            parsed["deviation_score"] = deviation
+                            comparison = st.session_state.patient_tracker.update(parsed)
+                            parsed.update(comparison)
                             st.session_state.diagnoses.appendleft(parsed)
                             count += 1
                 finally:
@@ -122,10 +119,8 @@ def main() -> None:
     # Top row: metrics
     col1, col2, col3, col4 = st.columns(4)
     all_diagnoses = list(st.session_state.diagnoses)
-    tracker = st.session_state.trend_tracker
-    class_stats = tracker.get_class_stats()
-    normal_count = class_stats["NORM"]["count"]
-    dangerous_count = sum(class_stats[c]["count"] for c in DANGEROUS_CLASSES)
+    normal_count = sum(1 for d in all_diagnoses if d.get("diagnosis_class") == "NORM")
+    dangerous_count = sum(1 for d in all_diagnoses if d.get("is_dangerous"))
 
     with col1:
         st.metric("Wszystkie badania", st.session_state.total_exams)
@@ -166,9 +161,20 @@ def main() -> None:
                         icon = "❗" if is_dangerous else "✅"
                         processed = diag.get("timestamp_processed")
                         ts = processed[:19] if processed else "brak"
+                        exam_num = diag.get("exam_number")
+                        class_changed = diag.get("class_changed", False)
+                        prev_class = diag.get("prev_diagnosis_class")
+
+                        if exam_num and class_changed and prev_class:
+                            exam_label = f" :orange[(badanie nr {exam_num}, {prev_class} → {diag['diagnosis_class']})]"
+                        elif exam_num:
+                            exam_label = f" (badanie nr {exam_num})"
+                        else:
+                            exam_label = ""
+
                         st.markdown(
                             f"**{icon} {diag['diagnosis_class']}**"
-                            f" - {diag['diagnosis_probability'] * 100:.1f}%  \n"
+                            f" - {diag['diagnosis_probability'] * 100:.1f}%{exam_label}  \n"
                             f"{diag['hospital_name']}  \n"
                             f"{ts}"
                         )
@@ -195,11 +201,19 @@ def main() -> None:
                 )
 
             with col_info2:
+                patient_id = selected.get("patient_id")
+                exam_number = selected.get("exam_number")
+                if patient_id is not None and exam_number is not None:
+                    patient_label = f"Pacjent ID {patient_id} — badanie nr {exam_number}"
+                else:
+                    patient_label = "Brak danych o pacjencie"
+
                 st.markdown(
                     f"**Pacjent:**  \n"
+                    f"- {patient_label}  \n"
                     f"- Wiek: {selected['patient_age'] or 'brak'}  \n"
                     f"- Płeć: {selected['patient_sex'] or 'brak'}  \n"
-                    f"- ID badania: {selected['patient_ecg_id']}"
+                    f"- ID EKG: {selected['patient_ecg_id']}"
                 )
 
             st.markdown("---")
@@ -210,19 +224,32 @@ def main() -> None:
 
             desc = CLASS_DESCRIPTIONS.get(diag_class, "")
             translated = CLASS_TRANSLATIONS.get(desc, desc)
-            diagnosis_text = (
-                f"**Diagnoza: {diag_class}** ({diag_prob:.1f}%). \n{translated}"
-            )
+            diagnosis_text = f"**Diagnoza: {diag_class}** ({diag_prob:.1f}%). \n{translated}"
 
             if is_dangerous:
                 st.error(diagnosis_text)
             else:
                 st.success(diagnosis_text)
 
-            if selected.get("deviation_score") is not None:
-                st.markdown(
-                    f"**Odchylenie od trendu klasy:** {selected['deviation_score']:.4f}"
-                )
+            # Inter-exam comparison (shown only for 2nd+ exam of a patient)
+            exam_number = selected.get("exam_number")
+            prev_class = selected.get("prev_diagnosis_class")
+            if exam_number is not None and exam_number > 1 and prev_class is not None:
+                class_changed = selected.get("class_changed", False)
+                feature_deviation = selected.get("feature_deviation")
+
+                if class_changed:
+                    st.warning(
+                        f"Zmiana diagnozy: **{prev_class}** → **{diag_class}**"
+                    )
+                else:
+                    st.info(f"Diagnoza bez zmian od poprzedniego badania: **{prev_class}**")
+
+                if feature_deviation is not None:
+                    st.markdown(
+                        f"**Odchylenie cech sygnału od poprzedniego badania:** "
+                        f"{feature_deviation:.4f}"
+                    )
 
             if selected.get("ground_truth"):
                 correct = selected["ground_truth"] == diag_class
@@ -306,45 +333,38 @@ def main() -> None:
                     accuracy = correct / total_with_gt * 100
                     st.markdown(f"- **{accuracy:.1f}%** ({correct}/{total_with_gt})")
 
-    # Trend analysis
+    # Historia pacjentów
     st.markdown("---")
-    st.subheader("Analiza trendu")
+    st.subheader("Historia pacjentów")
 
-    tracker = st.session_state.trend_tracker
-    centroids = {
-        c: tracker.get_centroid(c)
-        for c in CLASS_NAMES
-        if tracker.get_centroid(c) is not None
-    }
+    tracker = st.session_state.patient_tracker
+    patient_stats = tracker.get_stats()
 
-    if centroids:
-        col_trend1, col_trend2 = st.columns(2)
+    col_ps1, col_ps2 = st.columns(2)
+    with col_ps1:
+        st.metric("Unikalnych pacjentów", patient_stats["total_patients"])
+    with col_ps2:
+        st.metric("Pacjenci z powtórnymi badaniami", patient_stats["patients_with_history"])
 
-        with col_trend1:
-            st.plotly_chart(
-                create_centroid_chart(centroids),
-                use_container_width=True,
-            )
-
-        with col_trend2:
-            history = tracker.get_deviation_history()
-            if history:
+    selected = st.session_state.selected_exam
+    if selected:
+        patient_id = selected.get("patient_id")
+        if patient_id is not None:
+            patient_history = tracker.get_patient_history(patient_id)
+            if len(patient_history) > 1:
                 st.plotly_chart(
-                    create_deviation_timeline(history, CLASS_NAMES),
+                    create_patient_exam_timeline(patient_history, patient_id),
                     use_container_width=True,
                 )
-            else:
-                st.info("Zbyt mało danych dla wykresu odchyleń.")
-
-        stats = tracker.get_class_stats()
-        st.markdown("**Statystyki dla klas:**")
-        stat_cols = st.columns(len(CLASS_NAMES))
-        for col, cls in zip(stat_cols, CLASS_NAMES, strict=True):
-            with col:
-                count = stats[cls]["count"]
-                st.markdown(f"**{cls}**  \nPróbek: {count}")
+            elif len(patient_history) == 1:
+                st.info(
+                    f"Pacjent {patient_id} ma tylko jedno badanie — "
+                    "historia pojawi się po kolejnym badaniu."
+                )
+    elif patient_stats["total_patients"] == 0:
+        st.info("Brak danych o historii pacjentów...")
     else:
-        st.info("Brak danych do analizy trendu...")
+        st.info("Wybierz badanie z listy, aby zobaczyć historię pacjenta.")
 
     if auto_refresh:
         st_autorefresh(interval=refresh_interval * 1000, key="ecg_autorefresh")
