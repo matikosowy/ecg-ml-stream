@@ -203,6 +203,7 @@ class TestParseDiagnosisMessage:
 
     def test_patient_fields_extracted(self, fake_message):
         result = parse_diagnosis_message(fake_message)
+        assert result["patient_id"] == 13619
         assert result["patient_age"] == 45
         assert result["patient_sex"] == "M"
         assert result["patient_ecg_id"] == 42
@@ -259,6 +260,7 @@ class TestParseDiagnosisMessage:
 
     def test_missing_patient_fields_are_none(self):
         result = parse_diagnosis_message({})
+        assert result["patient_id"] is None
         assert result["patient_age"] is None
         assert result["patient_sex"] is None
         assert result["patient_ecg_id"] is None

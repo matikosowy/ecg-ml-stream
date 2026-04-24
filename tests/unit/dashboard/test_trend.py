@@ -1,4 +1,4 @@
-"""Unit tests for TrendTracker in ECG-ML-STREAM.
+"""Unit tests for PatientHistoryTracker in ECG-ML-STREAM.
 
 Copyright 2026 Mateusz Golebiewski
 """
@@ -6,8 +6,8 @@ Copyright 2026 Mateusz Golebiewski
 import numpy as np
 import pytest
 
-from ecg_ml_stream.dashboard.trend import TrendTracker, extract_signal_features
-from ecg_ml_stream.utils.constants import CLASS_NAMES, NUM_LEADS
+from ecg_ml_stream.dashboard.trend import PatientHistoryTracker, extract_signal_features
+from ecg_ml_stream.utils.constants import NUM_LEADS
 
 _N_FEATURES = NUM_LEADS * 2
 
@@ -18,6 +18,7 @@ def _make_signal(num_leads: int = NUM_LEADS, num_samples: int = 100) -> list[lis
 
 
 def _make_diagnosis(
+    patient_id: int | None = 1,
     cls: str = "NORM",
     signal: list[list[float]] | None = None,
     exam_id: str = "exam-1",
@@ -26,6 +27,7 @@ def _make_diagnosis(
     if signal is None:
         signal = _make_signal()
     return {
+        "patient_id": patient_id,
         "diagnosis_class": cls,
         "signal_data": signal,
         "exam_id": exam_id,
@@ -35,8 +37,7 @@ def _make_diagnosis(
 
 class TestExtractSignalFeatures:
     def test_returns_correct_shape(self):
-        signal = _make_signal()
-        features = extract_signal_features(signal)
+        features = extract_signal_features(_make_signal())
         assert features.shape == (_N_FEATURES,)
 
     def test_returns_none_for_empty_input(self):
@@ -56,202 +57,147 @@ class TestExtractSignalFeatures:
         assert features[1] == pytest.approx(np.std(vals))
 
 
-class TestTrendTrackerInit:
+class TestPatientHistoryTrackerInit:
+    def test_stats_are_zero_initially(self):
+        tracker = PatientHistoryTracker()
+        stats = tracker.get_stats()
+        assert stats["total_patients"] == 0
+        assert stats["patients_with_history"] == 0
+
+    def test_patient_history_empty_initially(self):
+        tracker = PatientHistoryTracker()
+        assert tracker.get_patient_history(99) == []
+
+
+class TestPatientHistoryTrackerUpdate:
     @pytest.fixture
-    def tracker(self) -> TrendTracker:
-        return TrendTracker(CLASS_NAMES)
+    def tracker(self) -> PatientHistoryTracker:
+        return PatientHistoryTracker()
 
-    def test_count_is_zero_for_all_classes(self, tracker):
-        for c in CLASS_NAMES:
-            assert tracker._count[c] == 0
-
-    def test_centroid_is_none_for_all_classes(self, tracker):
-        for c in CLASS_NAMES:
-            assert tracker.get_centroid(c) is None
-
-    def test_deviation_history_is_empty(self, tracker):
-        assert tracker.get_deviation_history() == []
-
-
-class TestTrendTrackerUpdate:
-    @pytest.fixture
-    def tracker(self) -> TrendTracker:
-        return TrendTracker(CLASS_NAMES)
-
-    def test_single_update_increments_count(self, tracker):
-        tracker.update(_make_diagnosis())
-        assert tracker._count["NORM"] == 1
-
-    def test_single_update_sets_centroid(self, tracker):
-        diag = _make_diagnosis()
-        tracker.update(diag)
-        centroid = tracker.get_centroid("NORM")
-        assert centroid is not None
-        assert centroid.shape == (_N_FEATURES,)
-
-    def test_centroid_matches_features_after_one_sample(self, tracker):
-        signal = _make_signal()
-        diag = _make_diagnosis(signal=signal)
-        tracker.update(diag)
-        centroid = tracker.get_centroid("NORM")
-        expected = extract_signal_features(signal)
-        np.testing.assert_array_almost_equal(centroid, expected)
-
-    def test_two_updates_produce_averaged_centroid(self, tracker):
-        sig_a = _make_signal(num_samples=50)
-        sig_b = _make_signal(num_samples=80)
-
-        tracker.update(_make_diagnosis(signal=sig_a))
-        tracker.update(_make_diagnosis(signal=sig_b, exam_id="exam-2"))
-
-        centroid = tracker.get_centroid("NORM")
-        feat_a = extract_signal_features(sig_a)
-        feat_b = extract_signal_features(sig_b)
-        expected = (feat_a + feat_b) / 2
-        np.testing.assert_array_almost_equal(centroid, expected)
-
-    def test_returns_float_deviation(self, tracker):
+    def test_returns_dict_with_required_keys(self, tracker):
         result = tracker.update(_make_diagnosis())
-        assert isinstance(result, float)
+        assert {"exam_number", "feature_deviation", "class_changed", "prev_diagnosis_class"} <= set(
+            result
+        )
 
-    def test_returns_none_for_missing_signal(self, tracker):
-        diag = {"diagnosis_class": "NORM", "signal_data": None}
-        assert tracker.update(diag) is None
+    def test_first_exam_has_number_one(self, tracker):
+        result = tracker.update(_make_diagnosis())
+        assert result["exam_number"] == 1
 
-    def test_returns_none_for_empty_signal(self, tracker):
-        diag = {"diagnosis_class": "NORM", "signal_data": []}
-        assert tracker.update(diag) is None
-
-    def test_returns_none_for_unknown_class(self, tracker):
-        diag = _make_diagnosis(cls="UNKNOWN")
-        assert tracker.update(diag) is None
-
-    def test_variance_is_none_after_one_sample(self, tracker):
-        tracker.update(_make_diagnosis())
-        assert tracker.get_variance("NORM") is None
-
-    def test_variance_shape_after_two_samples(self, tracker):
+    def test_second_exam_has_number_two(self, tracker):
         tracker.update(_make_diagnosis(exam_id="e1"))
-        tracker.update(_make_diagnosis(exam_id="e2"))
-        variance = tracker.get_variance("NORM")
-        assert variance is not None
-        assert variance.shape == (_N_FEATURES,)
+        result = tracker.update(_make_diagnosis(exam_id="e2"))
+        assert result["exam_number"] == 2
 
-    def test_history_appended(self, tracker):
-        tracker.update(_make_diagnosis())
-        history = tracker.get_deviation_history("NORM")
-        assert len(history) == 1
-        assert history[0]["exam_id"] == "exam-1"
+    def test_first_exam_has_no_comparison(self, tracker):
+        result = tracker.update(_make_diagnosis())
+        assert result["feature_deviation"] is None
+        assert result["class_changed"] is None
+        assert result["prev_diagnosis_class"] is None
 
+    def test_second_exam_has_feature_deviation(self, tracker):
+        tracker.update(_make_diagnosis(exam_id="e1"))
+        result = tracker.update(_make_diagnosis(exam_id="e2"))
+        assert result["feature_deviation"] is not None
+        assert isinstance(result["feature_deviation"], float)
 
-class TestTrendTrackerDeviation:
-    @pytest.fixture
-    def tracker(self) -> TrendTracker:
-        return TrendTracker(CLASS_NAMES)
+    def test_feature_deviation_is_nonnegative(self, tracker):
+        tracker.update(_make_diagnosis(exam_id="e1"))
+        result = tracker.update(_make_diagnosis(exam_id="e2"))
+        assert result["feature_deviation"] >= 0.0
 
-    def test_first_sample_deviation_is_zero(self, tracker):
-        deviation = tracker.update(_make_diagnosis())
-        assert deviation == pytest.approx(0.0)
-
-    def test_identical_samples_have_zero_deviation(self, tracker):
+    def test_identical_signals_have_zero_deviation(self, tracker):
         signal = _make_signal()
         tracker.update(_make_diagnosis(signal=signal, exam_id="e1"))
-        dev = tracker.update(_make_diagnosis(signal=signal, exam_id="e2"))
-        assert dev == pytest.approx(0.0)
+        result = tracker.update(_make_diagnosis(signal=signal, exam_id="e2"))
+        assert result["feature_deviation"] == pytest.approx(0.0)
 
-    def test_different_signal_has_nonzero_deviation(self, tracker):
+    def test_different_signals_have_nonzero_deviation(self, tracker):
         rng = np.random.default_rng(0)
         sig_a = [rng.normal(0, 1, 100).tolist() for _ in range(NUM_LEADS)]
         sig_b = [rng.normal(5, 2, 100).tolist() for _ in range(NUM_LEADS)]
+        tracker.update(_make_diagnosis(signal=sig_a, exam_id="e1"))
+        result = tracker.update(_make_diagnosis(signal=sig_b, exam_id="e2"))
+        assert result["feature_deviation"] > 0.0
 
-        tracker.update(_make_diagnosis(signal=sig_a))
-        dev = tracker.update(_make_diagnosis(signal=sig_b, exam_id="e2"))
-        assert dev > 0.0
+    def test_class_changed_is_false_for_same_class(self, tracker):
+        tracker.update(_make_diagnosis(cls="NORM", exam_id="e1"))
+        result = tracker.update(_make_diagnosis(cls="NORM", exam_id="e2"))
+        assert result["class_changed"] is False
 
+    def test_class_changed_is_true_when_class_differs(self, tracker):
+        tracker.update(_make_diagnosis(cls="NORM", exam_id="e1"))
+        result = tracker.update(_make_diagnosis(cls="MI", exam_id="e2"))
+        assert result["class_changed"] is True
 
-class TestTrendTrackerHistory:
-    @pytest.fixture
-    def tracker(self) -> TrendTracker:
-        return TrendTracker(CLASS_NAMES)
+    def test_prev_diagnosis_class_matches_previous(self, tracker):
+        tracker.update(_make_diagnosis(cls="STTC", exam_id="e1"))
+        result = tracker.update(_make_diagnosis(cls="NORM", exam_id="e2"))
+        assert result["prev_diagnosis_class"] == "STTC"
 
-    def test_empty_initially(self, tracker):
-        assert tracker.get_deviation_history() == []
-        assert tracker.get_deviation_history("NORM") == []
+    def test_no_patient_id_returns_none_fields(self, tracker):
+        result = tracker.update(_make_diagnosis(patient_id=None))
+        assert result["exam_number"] is None
+        assert result["feature_deviation"] is None
+        assert result["class_changed"] is None
 
-    def test_respects_max_history(self):
-        tracker = TrendTracker(CLASS_NAMES, max_history=3)
+    def test_missing_signal_skips_deviation(self, tracker):
+        tracker.update(_make_diagnosis(exam_id="e1"))
+        diag = _make_diagnosis(exam_id="e2")
+        diag["signal_data"] = None
+        result = tracker.update(diag)
+        assert result["feature_deviation"] is None
+
+    def test_different_patients_tracked_independently(self, tracker):
+        tracker.update(_make_diagnosis(patient_id=1, cls="NORM", exam_id="e1"))
+        tracker.update(_make_diagnosis(patient_id=2, cls="MI", exam_id="e2"))
+        result_p1 = tracker.update(_make_diagnosis(patient_id=1, cls="MI", exam_id="e3"))
+        assert result_p1["exam_number"] == 2
+        assert result_p1["prev_diagnosis_class"] == "NORM"
+
+    def test_stats_update_after_updates(self, tracker):
+        tracker.update(_make_diagnosis(patient_id=1, exam_id="e1"))
+        tracker.update(_make_diagnosis(patient_id=1, exam_id="e2"))
+        tracker.update(_make_diagnosis(patient_id=2, exam_id="e3"))
+        stats = tracker.get_stats()
+        assert stats["total_patients"] == 2
+        assert stats["patients_with_history"] == 1
+
+    def test_max_exams_per_patient_respected(self):
+        tracker = PatientHistoryTracker(max_exams_per_patient=3)
         for i in range(5):
-            tracker.update(_make_diagnosis(exam_id=f"exam-{i}"))
-
-        history = tracker.get_deviation_history("NORM")
+            tracker.update(_make_diagnosis(patient_id=1, exam_id=f"e{i}"))
+        history = tracker.get_patient_history(1)
         assert len(history) == 3
-        assert history[0]["exam_id"] == "exam-2"
-
-    def test_entry_structure(self, tracker):
-        tracker.update(_make_diagnosis())
-        entry = tracker.get_deviation_history("NORM")[0]
-        assert "timestamp" in entry
-        assert "deviation" in entry
-        assert "exam_id" in entry
-        assert "class_name" in entry
-
-    def test_combined_history_returns_all_classes(self, tracker):
-        tracker.update(_make_diagnosis(cls="NORM"))
-        tracker.update(
-            _make_diagnosis(cls="MI", exam_id="exam-2", timestamp="2026-01-01T00:00:01")
-        )
-
-        combined = tracker.get_deviation_history()
-        assert len(combined) == 2
-        classes = {e["class_name"] for e in combined}
-        assert classes == {"NORM", "MI"}
-
-    def test_combined_history_sorted_by_timestamp(self, tracker):
-        tracker.update(_make_diagnosis(cls="MI", timestamp="2026-01-01T00:00:02"))
-        tracker.update(
-            _make_diagnosis(cls="NORM", timestamp="2026-01-01T00:00:01", exam_id="exam-2")
-        )
-
-        combined = tracker.get_deviation_history()
-        assert combined[0]["timestamp"] < combined[1]["timestamp"]
 
 
-class TestGetCentroidPerLead:
-    def test_returns_none_when_no_data(self):
-        tracker = TrendTracker(CLASS_NAMES)
-        assert tracker.get_centroid_per_lead("NORM") is None
-
-    def test_returns_dict_with_lead_keys(self):
-        tracker = TrendTracker(CLASS_NAMES)
-        tracker.update(_make_diagnosis())
-        result = tracker.get_centroid_per_lead("NORM")
-        assert len(result) == NUM_LEADS
-        assert all(isinstance(result[i], dict) for i in range(NUM_LEADS))
-
-    def test_per_lead_contains_expected_keys(self):
-        tracker = TrendTracker(CLASS_NAMES)
-        tracker.update(_make_diagnosis())
-        result = tracker.get_centroid_per_lead("NORM")
-        for i in range(NUM_LEADS):
-            assert "mean_amplitude" in result[i]
-            assert "std" in result[i]
-
-
-class TestGetClassStats:
+class TestGetPatientHistory:
     @pytest.fixture
-    def tracker(self) -> TrendTracker:
-        return TrendTracker(CLASS_NAMES)
+    def tracker(self) -> PatientHistoryTracker:
+        return PatientHistoryTracker()
 
-    def test_returns_all_classes(self, tracker):
-        stats = tracker.get_class_stats()
-        assert set(stats.keys()) == set(CLASS_NAMES)
+    def test_returns_list(self, tracker):
+        tracker.update(_make_diagnosis())
+        assert isinstance(tracker.get_patient_history(1), list)
 
-    def test_count_reflects_updates(self, tracker):
-        tracker.update(_make_diagnosis(cls="NORM"))
-        tracker.update(_make_diagnosis(cls="NORM", exam_id="exam-2"))
-        tracker.update(_make_diagnosis(cls="MI", exam_id="exam-3"))
+    def test_entry_has_expected_keys(self, tracker):
+        tracker.update(_make_diagnosis())
+        entry = tracker.get_patient_history(1)[0]
+        assert "exam_id" in entry
+        assert "timestamp_processed" in entry
+        assert "diagnosis_class" in entry
 
-        stats = tracker.get_class_stats()
-        assert stats["NORM"]["count"] == 2
-        assert stats["MI"]["count"] == 1
-        assert stats["STTC"]["count"] == 0
+    def test_features_not_exposed(self, tracker):
+        tracker.update(_make_diagnosis())
+        entry = tracker.get_patient_history(1)[0]
+        assert "features" not in entry
+
+    def test_history_ordered_oldest_first(self, tracker):
+        tracker.update(_make_diagnosis(exam_id="first", timestamp="2026-01-01T00:00:00"))
+        tracker.update(_make_diagnosis(exam_id="second", timestamp="2026-01-01T00:01:00"))
+        history = tracker.get_patient_history(1)
+        assert history[0]["exam_id"] == "first"
+        assert history[1]["exam_id"] == "second"
+
+    def test_unknown_patient_returns_empty(self, tracker):
+        assert tracker.get_patient_history(9999) == []

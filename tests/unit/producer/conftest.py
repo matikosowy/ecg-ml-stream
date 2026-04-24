@@ -32,7 +32,7 @@ def sample_kafka_message() -> dict:
             "city": "Testcity",
         },
         "thread_id": 0,
-        "patient": {"ecg_id": 1, "age": 55, "sex": "M"},
+        "patient": {"patient_id": 13619, "ecg_id": 1, "age": 55, "sex": "M"},
         "signal": {
             "data": rng.standard_normal((12, 1000)).tolist(),
             "sampling_rate": 100,
@@ -70,6 +70,7 @@ def fake_sample() -> dict:
         "signal": rng.standard_normal((12, 1000)).tolist(),
         "label": 0,
         "label_name": "NORM",
+        "patient_id": 13619,
         "age": 55,
         "sex": 0,
     }
@@ -85,4 +86,6 @@ def producer(fake_sample: dict) -> Generator[ECGProducer, None, None]:
     with patch(_KAFKA_PRODUCER), patch(_ECG_DATASET) as mock_ds_cls:
         mock_ds = mock_ds_cls.return_value
         mock_ds.get_sample_for_streaming.return_value = fake_sample
+        mock_ds.get_sample_for_patient.return_value = fake_sample
+        mock_ds.multi_record_patient_ids = frozenset()
         yield ECGProducer(data_path="/fake", num_threads=1, interval_sec=0.1)

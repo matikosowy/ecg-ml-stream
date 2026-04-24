@@ -8,12 +8,11 @@ import plotly.graph_objects as go
 import pytest
 
 from ecg_ml_stream.dashboard.plotting import (
-    create_centroid_chart,
-    create_deviation_timeline,
     create_ecg_plot,
+    create_patient_exam_timeline,
     create_probability_chart,
 )
-from ecg_ml_stream.utils.constants import CLASS_COLORS, CLASS_NAMES, ECG_LEAD_NAMES
+from ecg_ml_stream.utils.constants import CLASS_COLORS, ECG_LEAD_NAMES
 
 
 class TestCreateEcgPlot:
@@ -108,78 +107,57 @@ class TestCreateProbabilityChart:
         assert fig.data[0].marker.color[0] == expected_color
 
 
-class TestCreateCentroidChart:
+class TestCreatePatientExamTimeline:
     @staticmethod
-    def _make_centroid(n_leads: int = 12) -> np.ndarray:
-        """Create a fake centroid array with n_leads * 2 features."""
-        return np.arange(n_leads * 2, dtype=np.float64) * 0.1
+    def _make_history(n: int, cls: str = "NORM") -> list[dict]:
+        return [
+            {
+                "exam_id": f"e{i}",
+                "diagnosis_class": cls,
+                "timestamp_processed": f"2026-01-0{i + 1}T00:00:00",
+            }
+            for i in range(n)
+        ]
 
     def test_returns_figure(self):
-        centroids = {"NORM": self._make_centroid()}
-        fig = create_centroid_chart(centroids)
+        fig = create_patient_exam_timeline(self._make_history(2), patient_id=1)
         assert isinstance(fig, go.Figure)
 
-    def test_trace_count_matches_classes_with_data(self):
-        centroids = {
-            "NORM": self._make_centroid(),
-            "MI": self._make_centroid(),
-        }
-        fig = create_centroid_chart(centroids)
-        assert len(fig.data) == 2
-
-    def test_empty_centroids_produces_empty_figure(self):
-        fig = create_centroid_chart({})
+    def test_empty_history_returns_empty_figure(self):
+        fig = create_patient_exam_timeline([], patient_id=1)
         assert len(fig.data) == 0
 
-    def test_y_values_are_mean_amplitudes(self):
-        centroid = self._make_centroid()
-        centroids = {"NORM": centroid}
-        fig = create_centroid_chart(centroids, n_leads=12)
-        expected = [centroid[i * 2] for i in range(12)]
-        assert list(fig.data[0].y) == pytest.approx(expected)
+    def test_single_trace_for_patient(self):
+        fig = create_patient_exam_timeline(self._make_history(3), patient_id=42)
+        assert len(fig.data) == 1
 
-    def test_bar_colors_match_class_colors(self):
-        centroids = {"MI": self._make_centroid()}
-        fig = create_centroid_chart(centroids)
-        assert fig.data[0].marker.color == CLASS_COLORS["MI"]
+    def test_x_axis_has_correct_exam_numbers(self):
+        fig = create_patient_exam_timeline(self._make_history(3), patient_id=1)
+        assert list(fig.data[0].x) == [1, 2, 3]
 
-    def test_x_labels_are_lead_names(self):
-        centroids = {"NORM": self._make_centroid()}
-        fig = create_centroid_chart(centroids, n_leads=12)
-        assert list(fig.data[0].x) == ECG_LEAD_NAMES[:12]
-
-
-class TestCreateDeviationTimeline:
-    def test_returns_figure(self):
-        fig = create_deviation_timeline([], CLASS_NAMES)
-        assert isinstance(fig, go.Figure)
-
-    def test_empty_history_has_no_traces(self):
-        fig = create_deviation_timeline([], CLASS_NAMES)
-        assert len(fig.data) == 0
-
-    def test_traces_match_classes_in_history(self):
+    def test_y_axis_has_diagnosis_classes(self):
         history = [
-            {"timestamp": "2026-01-01T00:00:00", "deviation": 0.1,
-             "exam_id": "e1", "class_name": "NORM"},
-            {"timestamp": "2026-01-01T00:00:01", "deviation": 0.2,
-             "exam_id": "e2", "class_name": "MI"},
+            {"exam_id": "e1", "diagnosis_class": "NORM", "timestamp_processed": "t1"},
+            {"exam_id": "e2", "diagnosis_class": "MI", "timestamp_processed": "t2"},
         ]
-        fig = create_deviation_timeline(history, CLASS_NAMES)
-        assert len(fig.data) == 2
+        fig = create_patient_exam_timeline(history, patient_id=1)
+        assert list(fig.data[0].y) == ["NORM", "MI"]
 
-    def test_marker_color_matches_class(self):
+    def test_changed_exam_uses_star_symbol(self):
         history = [
-            {"timestamp": "2026-01-01T00:00:00", "deviation": 0.1,
-             "exam_id": "e1", "class_name": "NORM"},
+            {"exam_id": "e1", "diagnosis_class": "NORM", "timestamp_processed": "t1"},
+            {"exam_id": "e2", "diagnosis_class": "MI", "timestamp_processed": "t2"},
         ]
-        fig = create_deviation_timeline(history, CLASS_NAMES)
-        assert fig.data[0].marker.color == CLASS_COLORS["NORM"]
+        fig = create_patient_exam_timeline(history, patient_id=1)
+        symbols = list(fig.data[0].marker.symbol)
+        assert symbols[0] == "circle"
+        assert symbols[1] == "star"
 
-    def test_scatter_y_values_are_deviations(self):
-        history = [
-            {"timestamp": "t1", "deviation": 0.15, "exam_id": "e1", "class_name": "NORM"},
-            {"timestamp": "t2", "deviation": 0.25, "exam_id": "e2", "class_name": "NORM"},
-        ]
-        fig = create_deviation_timeline(history, CLASS_NAMES)
-        assert list(fig.data[0].y) == [0.15, 0.25]
+    def test_unchanged_exam_uses_circle_symbol(self):
+        fig = create_patient_exam_timeline(self._make_history(3, cls="NORM"), patient_id=1)
+        symbols = list(fig.data[0].marker.symbol)
+        assert all(s == "circle" for s in symbols)
+
+    def test_title_contains_patient_id(self):
+        fig = create_patient_exam_timeline(self._make_history(2), patient_id=99)
+        assert "99" in fig.layout.title.text

@@ -20,7 +20,7 @@ def fake_message() -> dict:
         "timestamp_sent": "2026-01-01T00:00:00",
         "timestamp_processed": "2026-01-01T00:00:01",
         "hospital": {"id": "H1", "name": "Hospital A", "city": "Warsaw"},
-        "patient": {"age": 45, "sex": "M", "ecg_id": 42},
+        "patient": {"patient_id": 13619, "age": 45, "sex": "M", "ecg_id": 42},
         "diagnosis_class": "NORM",
         "diagnosis_probability": 0.9,
         "all_probabilities": {"NORM": 0.9, "MI": 0.05, "STTC": 0.02, "CD": 0.02, "HYP": 0.01},

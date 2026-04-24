@@ -65,12 +65,14 @@ class TestECGProducerInit:
         assert producer.stats["start_time"] is None
 
     def test_kafka_producer_receives_bootstrap_servers(self):
-        with patch(_KAFKA_PRODUCER) as mock_kafka, patch(_ECG_DATASET):
+        with patch(_KAFKA_PRODUCER) as mock_kafka, patch(_ECG_DATASET) as mock_ds_cls:
+            mock_ds_cls.return_value.multi_record_patient_ids = frozenset()
             ECGProducer(bootstrap_servers="broker:9092", data_path="/fake")
         assert mock_kafka.call_args.kwargs["bootstrap_servers"] == "broker:9092"
 
     def test_dataset_initialized_with_test_split(self):
         with patch(_KAFKA_PRODUCER), patch(_ECG_DATASET) as mock_ds:
+            mock_ds.return_value.multi_record_patient_ids = frozenset()
             ECGProducer(data_path="/fake", sampling_rate=500)
         mock_ds.assert_called_once_with(data_path="/fake", sampling_rate=500, split="test")
 
@@ -114,6 +116,53 @@ class TestCreateMessage:
         msg = producer._create_message(thread_id=0)
         hospital_ids = {h["id"] for h in ECGProducer.HOSPITALS}
         assert msg["hospital"]["id"] in hospital_ids
+
+
+class TestPickSample:
+    def test_uses_returning_patient_when_bias_triggers(self, producer, fake_sample):
+        producer._returning_patients.append(1001)
+        producer.dataset.get_sample_for_patient.return_value = fake_sample
+
+        with patch("ecg_ml_stream.producer.ecg_producer.random") as mock_rng:
+            mock_rng.random.return_value = 0.1
+            mock_rng.choice.return_value = 1001
+            sample = producer._pick_sample()
+
+        producer.dataset.get_sample_for_patient.assert_called_once_with(1001)
+        assert sample is fake_sample
+
+    def test_falls_back_to_streaming_when_patient_sample_is_none(self, producer, fake_sample):
+        producer._returning_patients.append(1001)
+        producer.dataset.get_sample_for_patient.return_value = None
+
+        with patch("ecg_ml_stream.producer.ecg_producer.random") as mock_rng:
+            mock_rng.random.return_value = 0.1
+            mock_rng.choice.return_value = 1001
+            sample = producer._pick_sample()
+
+        producer.dataset.get_sample_for_streaming.assert_called()
+        assert sample is fake_sample
+
+    def test_adds_multi_record_patient_to_returning_on_random_pick(self, producer, fake_sample):
+        fake_sample["patient_id"] = 1001
+        producer._multi_record_patient_ids = frozenset({1001})
+
+        with patch("ecg_ml_stream.producer.ecg_producer.random") as mock_rng:
+            mock_rng.random.return_value = 0.9
+            producer._pick_sample()
+
+        assert 1001 in producer._returning_patients
+
+    def test_does_not_add_duplicate_to_returning(self, producer, fake_sample):
+        fake_sample["patient_id"] = 1001
+        producer._multi_record_patient_ids = frozenset({1001})
+        producer._returning_patients.append(1001)
+
+        with patch("ecg_ml_stream.producer.ecg_producer.random") as mock_rng:
+            mock_rng.random.return_value = 0.9
+            producer._pick_sample()
+
+        assert list(producer._returning_patients).count(1001) == 1
 
 
 class TestProducerThread:
@@ -204,9 +253,10 @@ class TestMain:
             patch("sys.argv", ["prog", "--data-path", "/fake"]),
             patch("ecg_ml_stream.producer.ecg_producer.Path.exists", return_value=True),
             patch(_KAFKA_PRODUCER),
-            patch(_ECG_DATASET),
+            patch(_ECG_DATASET) as mock_ds_cls,
             patch.object(ECGProducer, "start"),
         ):
+            mock_ds_cls.return_value.multi_record_patient_ids = frozenset()
             main()
 
     def test_main_handles_keyboard_interrupt(self):
@@ -214,9 +264,10 @@ class TestMain:
             patch("sys.argv", ["prog", "--data-path", "/fake"]),
             patch("ecg_ml_stream.producer.ecg_producer.Path.exists", return_value=True),
             patch(_KAFKA_PRODUCER),
-            patch(_ECG_DATASET),
+            patch(_ECG_DATASET) as mock_ds_cls,
             patch.object(ECGProducer, "start", side_effect=KeyboardInterrupt),
             patch.object(ECGProducer, "stop") as mock_stop,
         ):
+            mock_ds_cls.return_value.multi_record_patient_ids = frozenset()
             main()
         mock_stop.assert_called_once()

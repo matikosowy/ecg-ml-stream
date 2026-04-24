@@ -46,7 +46,7 @@ def sample_payload() -> dict:
         "timestamp_sent": "2026-01-01T10:00:00",
         "hospital": {"id": "H1", "name": "Szpital Testowy", "city": "Warszawa"},
         "thread_id": 1,
-        "patient": {"ecg_id": "ECG001", "age": 45, "sex": "M"},
+        "patient": {"patient_id": 13619, "ecg_id": "ECG001", "age": 45, "sex": "M"},
         "signal": {
             "data": signal_data,
             "sampling_rate": 100,

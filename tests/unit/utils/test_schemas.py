@@ -66,7 +66,7 @@ class TestStreamInputSchema:
     def test_patient_nested_fields(self):
         patient = _field(STREAM_INPUT_SCHEMA, "patient").dataType
         names = {f.name for f in patient.fields}
-        assert names == {"ecg_id", "age", "sex"}
+        assert names == {"patient_id", "ecg_id", "age", "sex"}
 
     def test_patient_age_is_integer(self):
         patient = _field(STREAM_INPUT_SCHEMA, "patient").dataType

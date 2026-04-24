@@ -69,6 +69,26 @@ def csv_mocks():
 
 
 @pytest.fixture
+def csv_mocks_multi_patient():
+    """Patch pd.read_csv so that patient 1001 has two records in the train split."""
+    meta = pd.DataFrame(
+        {
+            "scp_codes": ["{'NORM': 100.0}"] * 5,
+            "strat_fold": [1, 1, 1, 9, 10],
+            "filename_lr": [f"records100/{i:05d}_lr" for i in range(1, 6)],
+            "filename_hr": [f"records500/{i:05d}_hr" for i in range(1, 6)],
+            "age": [50, 51, 52, 53, 54],
+            "sex": [0, 1, 0, 1, 0],
+            "patient_id": [1001, 1001, 1002, 1003, 1004],
+        },
+        index=pd.Index(range(1, 6), name="ecg_id"),
+    )
+    scp = _make_scp_df()
+    with patch("ecg_ml_stream.dataset.ecg_dataset.pd.read_csv", side_effect=_csv_side_effect(meta, scp)):
+        yield meta, scp
+
+
+@pytest.fixture
 def fake_signal_100hz() -> np.ndarray:
     """Fake wfdb signal: (1000 samples, 12 channels)."""
     return np.zeros((1000, 12), dtype=np.float32)

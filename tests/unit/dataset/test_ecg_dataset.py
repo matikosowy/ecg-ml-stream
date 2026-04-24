@@ -121,6 +121,38 @@ class TestECGDataset:
         assert isinstance(weights, torch.Tensor)
         assert len(weights) == 5
 
+    def test_multi_record_patient_ids_empty_when_all_unique(self, csv_mocks, tmp_path):
+        ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
+        result = ds.multi_record_patient_ids
+        assert isinstance(result, frozenset)
+        assert result == frozenset()
+
+    def test_multi_record_patient_ids_returns_duplicated_patients(
+        self, csv_mocks_multi_patient, tmp_path
+    ):
+        ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
+        result = ds.multi_record_patient_ids
+        assert 1001 in result
+        assert 1002 not in result
+
+    def test_get_sample_for_patient_returns_none_for_unknown(
+        self, csv_mocks, fake_signal_100hz, tmp_path
+    ):
+        ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
+        with patch(_RDSAMP, return_value=(fake_signal_100hz, {})):
+            result = ds.get_sample_for_patient(9999)
+        assert result is None
+
+    def test_get_sample_for_patient_returns_sample(
+        self, csv_mocks_multi_patient, fake_signal_100hz, tmp_path
+    ):
+        ds = ECGDataset(str(tmp_path), sampling_rate=100, split="train")
+        with patch(_RDSAMP, return_value=(fake_signal_100hz, {})):
+            sample = ds.get_sample_for_patient(1001)
+        assert sample is not None
+        assert sample["patient_id"] == 1001
+        assert "signal" in sample
+
 
 class TestCreateDataloaders:
     def test_returns_three_loaders(self, csv_mocks, tmp_path):
