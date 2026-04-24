@@ -186,7 +186,15 @@ def main() -> None:
                     st.markdown("---")
 
     with right_col:
-        st.subheader("Szczegóły badania")
+        detail_header, detail_close = st.columns([5, 1])
+        with detail_header:
+            st.subheader("Szczegóły badania")
+        with detail_close:
+            if st.session_state.selected_exam is not None:
+                if st.button("✕ Zamknij", key="close_detail"):
+                    st.session_state.selected_exam = None
+                    st.rerun()
+
         selected = st.session_state.selected_exam
 
         if selected:
@@ -366,7 +374,7 @@ def main() -> None:
     else:
         st.info("Wybierz badanie z listy, aby zobaczyć historię pacjenta.")
 
-    if auto_refresh:
+    if auto_refresh and st.session_state.selected_exam is None:
         st_autorefresh(interval=refresh_interval * 1000, key="ecg_autorefresh")
 
 
