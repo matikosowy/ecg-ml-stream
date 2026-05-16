@@ -32,7 +32,7 @@ pip install .
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-This starts: Kafka, Spark master + 2 workers, ECG consumer, Kafka UI, and Streamlit Dashboard.
+This starts: Kafka cluster (3 brokers), Spark master + 3 workers, ECG consumer, Kafka UI, and Streamlit Dashboard.
 
 | Service | URL |
 | --- | --- |
@@ -60,7 +60,7 @@ docker compose -f docker/docker-compose.yml down
 ### Run producer
 ```
 python -m ecg_ml_stream.producer.ecg_producer \
-    --bootstrap-servers localhost:29092 \
+    --bootstrap-servers localhost:29092,localhost:29093,localhost:29094 \
     --topic ecg-pending \
     --data-path data/ptb-xl-1.0.3 \
     --num-threads 4 \
