@@ -8,11 +8,11 @@
 
 
 [kafka]
-bootstrap_servers = "localhost:29092"
+bootstrap_servers = "localhost:29092,localhost:29093,localhost:29094"
 topic_pending = "ecg-pending"
 topic_diagnoses = "ecg-diagnoses"
 num_partitions = 4
-replication_factor = 1
+replication_factor = 3
 consumer_group = "dashboard-consumer"
 consumer_timeout_ms = 500
 
@@ -35,9 +35,9 @@ dropout = 0.2
 app_name = "ECG-ML-STREAM"
 shuffle_partitions = 4
 parallelism = 4
-executor_memory = "2g"
+executor_memory = "512m"
 executor_cores = 2
-driver_memory = "2g"
+driver_memory = "1g"
 driver_cores = 2
 checkpoint_path = "/app/checkpoints/ecg-streaming"
 trigger_interval = "1 seconds"

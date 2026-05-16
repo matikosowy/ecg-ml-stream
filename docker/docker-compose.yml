@@ -1,3 +1,27 @@
+x-kafka-common: &kafka-common
+  image: apache/kafka:3.7.0
+  networks:
+    - ecg-network
+  healthcheck:
+    test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+    interval: 10s
+    timeout: 10s
+    retries: 5
+
+x-kafka-env: &kafka-env
+  KAFKA_PROCESS_ROLES: broker,controller
+  KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_NUM_PARTITIONS: 4
+  CLUSTER_ID: 'D5BjBhUBQFas6qQqZaOiTQ'
+
 x-spark-worker: &spark-worker
   image: ecg-spark:latest
   depends_on:
@@ -13,73 +37,86 @@ x-spark-worker: &spark-worker
     resources:
       limits:
         cpus: "2.0"
-        memory: 2560M
+        memory: 1536M
   healthcheck:
     test: ["CMD-SHELL", "wget -q --spider http://localhost:8081/ || exit 1"]
     interval: 15s
     timeout: 10s
     retries: 5
     start_period: 20s
-  command: /bin/sh -c "exec spark-class org.apache.spark.deploy.worker.Worker --cores 2 --memory 2g --webui-port 8081 spark://spark-master:7077"
+  command: /bin/sh -c "exec spark-class org.apache.spark.deploy.worker.Worker --cores 2 --memory 1g --webui-port 8081 spark://spark-master:7077"
 
 services:
-  kafka:
-    image: apache/kafka:3.7.0
-    container_name: kafka
-    hostname: kafka
+  kafka-1:
+    <<: *kafka-common
+    container_name: kafka-1
+    hostname: kafka-1
     ports:
       - "29092:29092"
     environment:
+      <<: *kafka-env
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_NUM_PARTITIONS: 4
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LOG_DIRS: /var/lib/kafka/data
-      CLUSTER_ID: 'D5BjBhUBQFas6qQqZaOiTQ'
     volumes:
-      - kafka-data:/var/lib/kafka/data
-    networks:
-      - ecg-network
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
+      - kafka-1-data:/var/lib/kafka/data
+
+  kafka-2:
+    <<: *kafka-common
+    container_name: kafka-2
+    hostname: kafka-2
+    ports:
+      - "29093:29092"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:9092,PLAINTEXT_HOST://localhost:29093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-2-data:/var/lib/kafka/data
+
+  kafka-3:
+    <<: *kafka-common
+    container_name: kafka-3
+    hostname: kafka-3
+    ports:
+      - "29094:29092"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-3:9092,PLAINTEXT_HOST://localhost:29094
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-3-data:/var/lib/kafka/data
 
   kafka-init:
     image: apache/kafka:3.7.0
     container_name: kafka-init
     restart: "no"
     depends_on:
-      kafka:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
-    command: |
-      echo 'Creating Kafka topics...'
-
-      /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
-        --bootstrap-server kafka:9092 \
-        --topic ecg-pending \
-        --partitions 4 \
-        --replication-factor 1
-
-      /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
-        --bootstrap-server kafka:9092 \
-        --topic ecg-diagnoses \
-        --partitions 4 \
-        --replication-factor 1
-
-      echo 'Kafka topics created successfully!'
-      /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server kafka:9092
+    command:
+      - |
+        echo 'Waiting for Kafka quorum...'
+        sleep 5
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 \
+          --topic ecg-pending \
+          --partitions 4 \
+          --replication-factor 3
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 \
+          --topic ecg-diagnoses \
+          --partitions 4 \
+          --replication-factor 3
+        echo 'Kafka topics created successfully!'
+        /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server kafka-1:9092
     networks:
       - ecg-network
 
@@ -117,13 +154,24 @@ services:
     ports:
       - "8082:8081"   # Worker 2 Web UI
 
+  spark-worker-3:
+    <<: *spark-worker
+    container_name: spark-worker-3
+    hostname: spark-worker-3
+    ports:
+      - "8083:8081"   # Worker 3 Web UI
+
   ecg-consumer:
     image: ecg-spark:latest
     container_name: ecg-consumer
     ports:
       - "4040:4040"
     depends_on:
-      kafka:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -133,13 +181,15 @@ services:
         condition: service_healthy
       spark-worker-2:
         condition: service_healthy
+      spark-worker-3:
+        condition: service_healthy
     volumes: *spark-volumes
     networks:
       - ecg-network
     restart: on-failure
     command: >
       python -m ecg_ml_stream.streaming.processing
-        --kafka kafka:9092
+        --kafka kafka-1:9092,kafka-2:9092,kafka-3:9092
         --input-topic ecg-pending
         --output-topic ecg-diagnoses
         --model-path /app/models/ecg_resnet1d.pt
@@ -154,9 +204,13 @@ services:
     ports:
       - "8501:8501"
     environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
     depends_on:
-      kafka:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -173,9 +227,9 @@ services:
       - "8090:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: ecg-cluster
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
     depends_on:
-      kafka:
+      kafka-1:
         condition: service_healthy
     networks:
       - ecg-network
@@ -185,5 +239,7 @@ networks:
     driver: bridge
 
 volumes:
-  kafka-data:
+  kafka-1-data:
+  kafka-2-data:
+  kafka-3-data:
   spark-checkpoints:
