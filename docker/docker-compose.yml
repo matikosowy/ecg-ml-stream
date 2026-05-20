@@ -109,12 +109,14 @@ services:
           --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 \
           --topic ecg-pending \
           --partitions 4 \
-          --replication-factor 3
+          --replication-factor 3 \
+          --config min.insync.replicas=2
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
           --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 \
           --topic ecg-diagnoses \
           --partitions 4 \
-          --replication-factor 3
+          --replication-factor 3 \
+          --config min.insync.replicas=2
         echo 'Kafka topics created successfully!'
         /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server kafka-1:9092
     networks:
