@@ -201,3 +201,66 @@ class TestGetPatientHistory:
 
     def test_unknown_patient_returns_empty(self, tracker):
         assert tracker.get_patient_history(9999) == []
+
+
+class TestPatientHistoryTrackerDeduplication:
+    @pytest.fixture
+    def tracker(self) -> PatientHistoryTracker:
+        return PatientHistoryTracker()
+
+    def test_first_exam_is_not_duplicate(self, tracker):
+        assert tracker.update(_make_diagnosis(exam_id="e1"))["duplicate"] is False
+
+    def test_repeated_exam_id_is_marked_duplicate(self, tracker):
+        tracker.update(_make_diagnosis(exam_id="dup"))
+        assert tracker.update(_make_diagnosis(exam_id="dup"))["duplicate"] is True
+
+    def test_duplicate_does_not_grow_history(self, tracker):
+        tracker.update(_make_diagnosis(patient_id=1, exam_id="dup"))
+        tracker.update(_make_diagnosis(patient_id=1, exam_id="dup"))
+        assert len(tracker.get_patient_history(1)) == 1
+
+    def test_duplicate_returns_no_comparison_fields(self, tracker):
+        tracker.update(_make_diagnosis(exam_id="dup"))
+        result = tracker.update(_make_diagnosis(exam_id="dup"))
+        assert result["exam_number"] is None
+        assert result["feature_deviation"] is None
+        assert result["class_changed"] is None
+        assert result["prev_diagnosis_class"] is None
+
+    def test_duplicate_does_not_affect_next_genuine_exam(self, tracker):
+        tracker.update(_make_diagnosis(patient_id=1, cls="NORM", exam_id="e1"))
+        tracker.update(_make_diagnosis(patient_id=1, cls="MI", exam_id="e1"))
+        result = tracker.update(_make_diagnosis(patient_id=1, cls="MI", exam_id="e2"))
+        assert result["exam_number"] == 2
+        assert result["prev_diagnosis_class"] == "NORM"
+
+    def test_duplicates_are_counted_in_stats(self, tracker):
+        tracker.update(_make_diagnosis(exam_id="dup"))
+        tracker.update(_make_diagnosis(exam_id="dup"))
+        tracker.update(_make_diagnosis(exam_id="dup"))
+        assert tracker.get_stats()["duplicates_rejected"] == 2
+
+    def test_no_duplicates_counted_initially(self, tracker):
+        assert tracker.get_stats()["duplicates_rejected"] == 0
+
+    def test_missing_exam_id_is_never_duplicate(self, tracker):
+        first = _make_diagnosis()
+        first["exam_id"] = None
+        second = _make_diagnosis()
+        second["exam_id"] = None
+        tracker.update(first)
+        assert tracker.update(second)["duplicate"] is False
+
+    def test_rejected_patientless_message_does_not_consume_exam_id(self, tracker):
+        tracker.update(_make_diagnosis(patient_id=None, exam_id="e1"))
+        assert tracker.update(_make_diagnosis(patient_id=1, exam_id="e1"))["duplicate"] is False
+
+    def test_tracked_exam_ids_are_bounded(self):
+        tracker = PatientHistoryTracker(max_tracked_exam_ids=3)
+        for i in range(5):
+            tracker.update(_make_diagnosis(patient_id=1, exam_id=f"e{i}"))
+        # The oldest identifier was evicted, so its repeat is no longer detected.
+        assert tracker.update(_make_diagnosis(patient_id=1, exam_id="e0"))["duplicate"] is False
+        # The most recent one is still remembered.
+        assert tracker.update(_make_diagnosis(patient_id=1, exam_id="e4"))["duplicate"] is True
