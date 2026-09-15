@@ -106,6 +106,8 @@ def main() -> None:
                         parsed = parse_diagnosis_message(message.value)
                         if parsed:
                             comparison = st.session_state.patient_tracker.update(parsed)
+                            if comparison["duplicate"]:
+                                continue
                             parsed.update(comparison)
                             st.session_state.diagnoses.appendleft(parsed)
                             count += 1

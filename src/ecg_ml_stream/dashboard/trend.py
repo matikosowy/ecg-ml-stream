@@ -3,7 +3,7 @@
 Copyright 2026 Mateusz Golebiewski
 """
 
-from collections import deque
+from collections import OrderedDict, deque
 
 import numpy as np
 
@@ -48,17 +48,25 @@ class PatientHistoryTracker:
         self,
         max_exams_per_patient: int = 50,
         n_leads: int = NUM_LEADS,
+        max_tracked_exam_ids: int = 10_000,
     ) -> None:
         """Initialize the tracker.
 
         Args:
             max_exams_per_patient: Maximum exams stored per patient (FIFO).
             n_leads: Number of ECG leads used for feature extraction.
+            max_tracked_exam_ids: Size of the bounded set of already seen exam
+                identifiers used for deduplication.  Oldest entries are evicted
+                first, which keeps memory usage constant in a long-running
+                dashboard session.
 
         """
         self._max_exams = max_exams_per_patient
         self._n_leads = n_leads
         self._history: dict[int, deque] = {}
+        self._max_tracked_exam_ids = max_tracked_exam_ids
+        self._seen_exam_ids: OrderedDict[str, None] = OrderedDict()
+        self._duplicates_rejected = 0
 
     def update(self, diagnosis: dict) -> dict:
         """Register a new exam and return comparison with the previous one.
@@ -77,6 +85,10 @@ class PatientHistoryTracker:
                 - class_changed (bool | None): True when the diagnosis class
                   differs from the previous exam.  None for the first exam.
                 - prev_diagnosis_class (str | None): Class from the previous exam.
+                - duplicate (bool): True when this exam_id has already been
+                  processed.  The delivery pipeline is at-least-once, so the
+                  same exam can arrive twice; such a message is rejected and
+                  leaves the patient history untouched.
 
         """
         result: dict = {
@@ -84,7 +96,14 @@ class PatientHistoryTracker:
             "feature_deviation": None,
             "class_changed": None,
             "prev_diagnosis_class": None,
+            "duplicate": False,
         }
+
+        exam_id = diagnosis.get("exam_id")
+        if exam_id is not None and exam_id in self._seen_exam_ids:
+            self._duplicates_rejected += 1
+            result["duplicate"] = True
+            return result
 
         patient_id = diagnosis.get("patient_id")
         if patient_id is None:
@@ -107,11 +126,16 @@ class PatientHistoryTracker:
                 result["feature_deviation"] = float(np.linalg.norm(features - prev_features))
 
         history.append({
-            "exam_id": diagnosis.get("exam_id"),
+            "exam_id": exam_id,
             "timestamp_processed": diagnosis.get("timestamp_processed"),
             "diagnosis_class": diagnosis.get("diagnosis_class"),
             "features": features,
         })
+
+        if exam_id is not None:
+            self._seen_exam_ids[exam_id] = None
+            if len(self._seen_exam_ids) > self._max_tracked_exam_ids:
+                self._seen_exam_ids.popitem(last=False)
 
         return result
 
@@ -135,7 +159,8 @@ class PatientHistoryTracker:
         """Return summary statistics across all tracked patients.
 
         Returns:
-            Dict with total_patients and patients_with_history counts.
+            Dict with total_patients, patients_with_history and
+            duplicates_rejected counts.
 
         """
         total = len(self._history)
@@ -143,4 +168,5 @@ class PatientHistoryTracker:
         return {
             "total_patients": total,
             "patients_with_history": with_history,
+            "duplicates_rejected": self._duplicates_rejected,
         }

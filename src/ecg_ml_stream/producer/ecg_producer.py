@@ -86,6 +86,7 @@ class ECGProducer:
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             key_serializer=lambda k: k.encode("utf-8") if k else None,
             acks="all",  # Wait for all replicas to acknowledge the message
+            enable_idempotence=True,  # No duplicates from producer retries within a session
             retries=3,
             max_in_flight_requests_per_connection=1,  # Ensure message order per partition
             compression_type="gzip",  # Compress large ECG payloads
