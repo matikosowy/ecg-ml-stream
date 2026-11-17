@@ -48,7 +48,7 @@ STREAM_INPUT_SCHEMA = StructType(
                     StructField("data", ArrayType(ArrayType(DoubleType())), True),
                     StructField("sampling_rate", IntegerType(), True),
                     StructField("num_channels", IntegerType(), True),
-                    StructField("duration_seconds", DoubleType(), True),
+                    StructField("duration_sec", DoubleType(), True),
                     StructField("leads", ArrayType(StringType()), True),
                 ],
             ),

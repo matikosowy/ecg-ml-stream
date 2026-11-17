@@ -51,7 +51,7 @@ def sample_payload() -> dict:
             "data": signal_data,
             "sampling_rate": 100,
             "num_channels": 12,
-            "duration_seconds": 10.0,
+            "duration_sec": 10.0,
             "leads": ["I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"],
         },
         "metadata": {"ground_truth_label": 0, "ground_truth_name": "NORM"},
