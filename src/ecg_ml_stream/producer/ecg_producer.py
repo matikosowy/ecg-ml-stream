@@ -30,8 +30,8 @@ logger = logging.getLogger("producer")
 class ECGProducer:
     """Multi-thread Kafka producer that simulates hospital ECG streams.
 
-    Each thread represents one hospital and sends one PTB-XL record every `interval_sec`
-    seconds to the specified Kafka topic.
+    Each thread sends one PTB-XL record every `interval_sec` seconds to the specified
+    Kafka topic. The sending hospital is drawn at random from `HOSPITALS` for every message.
 
     Attributes:
         HOSPITALS (ClassVar[list[dict]]): List of simulated hospitals with IDs
@@ -64,7 +64,7 @@ class ECGProducer:
             bootstrap_servers (str): Kafka broker addresses.
             topic (str): Kafka topic name.
             data_path (str): Path to PTB-XL data.
-            num_threads (int): Number of threads to simulate hospitals.
+            num_threads (int): Number of parallel producer threads.
             interval_sec (float): Interval in seconds between ECG records.
             sampling_rate (int): Sampling rate in Hz.
 
@@ -184,7 +184,7 @@ class ECGProducer:
         }
 
     def _producer_thread(self, thread_id: int) -> None:
-        """Worker loop for a single hospital thread.
+        """Worker loop for a single producer thread.
 
         Sends records at `interval_sec` intervals.
 

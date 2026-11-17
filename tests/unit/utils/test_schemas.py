@@ -78,7 +78,7 @@ class TestStreamInputSchema:
     def test_signal_nested_fields(self):
         signal = _field(STREAM_INPUT_SCHEMA, "signal").dataType
         names = {f.name for f in signal.fields}
-        assert names == {"data", "sampling_rate", "num_channels", "duration_seconds", "leads"}
+        assert names == {"data", "sampling_rate", "num_channels", "duration_sec", "leads"}
 
     def test_signal_data_is_nested_array(self):
         signal = _field(STREAM_INPUT_SCHEMA, "signal").dataType
